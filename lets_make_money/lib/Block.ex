@@ -1,5 +1,10 @@
 defmodule CryptoCoin.Block do
-  def create(hash, prev_hash, nonce, trasanctions, diff) do
+  def create(hash, prev_block, nonce, trasanctions, diff) do
+    prev_hash = if prev_block != nil do
+      Map.get(prev_block, "hash")
+    else
+      nil
+    end
     %{
       "diff" => diff,
       "hash" => hash,
@@ -16,8 +21,7 @@ defmodule CryptoCoin.Block do
 
   def is_valid(block) do
     IO.puts("is_valid called ")
-    # Check the hash of the block.
-    # Check if included transactions are valid.
+    # Check if hash(prev_hash+trasactions+nounce) == diff
     true
   end
 end
