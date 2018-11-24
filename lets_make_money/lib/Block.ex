@@ -16,6 +16,11 @@ defmodule CryptoCoin.Block do
     }
   end
 
+  # Returns all transactions contained in the block
+  def get_trasactions(block) do
+    block |> Map.get("trasanctions")
+  end
+
   # Verifies if the block's prev_hash is equal to parent_block's hash
   def verify_block_parent(block, parent_block) do
     Map.get(block, "prev_hash") == Map.get(parent_block, "hash")

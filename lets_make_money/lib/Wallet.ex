@@ -22,18 +22,32 @@ defmodule CryptoCoin.Wallet do
   end
 
   def get_balance(pid, caller) do
-    IO.puts("get_balance called")
+    # IO.puts("get_balance called")
     GenServer.cast(pid, {:get_balance, caller})
   end
 
   # Private methods
   def handle_cast({:handle_blockchain_broadcast, chain}, state) do
-    {:noreply, state |> Map.put(:block_chain, chain)}
+    # For now go through the entire blockchain.
+    # May be there is a better way.
+    state = state |> Map.put(:block_chain, chain)
+    unspent_transactions = unspent_transactions(state.public_key, state.private_key, chain)
+    state = state |> Map.put(:unspent_transactions, unspent_transactions)
+    {:noreply, state}
   end
 
   def handle_cast({:get_balance, caller}, state) do
-    IO.puts("get_balance received")
-    send(caller, {:current_balance, 30})
+    send(caller, {:current_balance, availableBalance(state.unspent_transactions)})
     {:noreply, state}
+  end
+
+  defp availableBalance(utxos) do
+    Enum.reduce(utxos, 0, fn utxo, amount ->
+      amount + CryptoCoin.TransactionUnit.get_amount(utxo)
+    end)
+  end
+
+  defp unspent_transactions(public_key, private_key, chain) do
+    CryptoCoin.Blockchain.unspent_transactions(public_key, private_key, chain)
   end
 end

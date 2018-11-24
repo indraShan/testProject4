@@ -2,7 +2,7 @@ defmodule WalletTest do
   use ExUnit.Case
 
   setup %{} do
-    {:ok, wallet} = CryptoCoin.Wallet.create("public", "private_dont_read_this")
+    {:ok, wallet} = CryptoCoin.Wallet.create("key1", "key1")
     {:ok, wallet: wallet}
   end
 
@@ -11,6 +11,6 @@ defmodule WalletTest do
     CryptoCoin.Wallet.handle_blockchain_broadcast(wallet, chain)
 
     CryptoCoin.Wallet.get_balance(wallet, self())
-    assert_receive {:current_balance, 30}, 100
+    assert_receive {:current_balance, 2}, 100
   end
 end
