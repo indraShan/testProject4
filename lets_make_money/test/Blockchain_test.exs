@@ -19,28 +19,71 @@ defmodule BlockchainTest do
     assert CryptoCoin.Blockchain.get_last_block(chain) == second
   end
 
-  test "blockchain is valid" do
-    first = CryptoCoin.Block.create("first_block", nil, 2, nil, 3)
-    chain = CryptoCoin.Blockchain.create(first)
-    second = CryptoCoin.Block.create("second_block", first, 2, nil, 3)
-    chain = CryptoCoin.Blockchain.add(second, chain)
-    third = CryptoCoin.Block.create("third_block", second, 2, nil, 3)
-    chain = CryptoCoin.Blockchain.add(third, chain)
-    fourth = CryptoCoin.Block.create("fourth_block", third, 2, nil, 3)
-    chain = CryptoCoin.Blockchain.add(fourth, chain)
-    assert CryptoCoin.Blockchain.is_valid(chain) == true
+  test "blockchain is valid 1" do
+    assert CryptoCoin.Blockchain.is_valid(TestUtils.create_valid_blockchain()) == true
+  end
+
+  test "blockchain is valid 2" do
+    assert CryptoCoin.Blockchain.is_valid(TestUtils.create_valid_blockchain1()) == true
+  end
+
+  test "blockchain is valid 3" do
+    assert CryptoCoin.Blockchain.is_valid(TestUtils.create_valid_blockchain2()) == true
   end
 
   test "blockchain is invalid" do
-    first = CryptoCoin.Block.create("first_block", nil, 2, nil, 3)
+    first = TestUtils.create_valid_block()
     chain = CryptoCoin.Blockchain.create(first)
-    second = CryptoCoin.Block.create("second_block", first, 2, nil, 3)
-    chain = CryptoCoin.Blockchain.add(second, chain)
-    third = CryptoCoin.Block.create("third_block", second, 2, nil, 3)
-    fourth = CryptoCoin.Block.create("fourth_block", third, 2, nil, 3)
-    # Invalid order in the chain
-    chain = CryptoCoin.Blockchain.add(fourth, chain)
+
+    second =
+      CryptoCoin.Block.create(
+        "009C71591CED1C40DDF5C50DE260CCD6F043C54BDC48349C581D85FAFAD06E97",
+        first,
+        690,
+        [TestUtils.create_valid_transaction()],
+        2
+      )
+
+    third =
+      CryptoCoin.Block.create(
+        "0065943F7C84431D3B12136BD49332448696CA6A4519CC1A97936211ECF47433",
+        second,
+        900,
+        TestUtils.create_valid_transactions(),
+        2
+      )
+
     chain = CryptoCoin.Blockchain.add(third, chain)
+    chain = CryptoCoin.Blockchain.add(second, chain)
+
+    assert CryptoCoin.Blockchain.is_valid(chain) == false
+  end
+
+  test "blockchain is invalid2" do
+    first = TestUtils.create_valid_block()
+    chain = CryptoCoin.Blockchain.create(first)
+
+    third =
+      CryptoCoin.Block.create(
+        "0065943F7C84431D3B12136BD49332448696CA6A4519CC1A97936211ECF47433",
+        first,
+        900,
+        TestUtils.create_valid_transactions(),
+        2
+      )
+
+    second =
+      CryptoCoin.Block.create(
+        "009C71591CED1C40DDF5C50DE260CCD6F043C54BDC48349C581D85FAFAD06E97",
+        third,
+        690,
+        [TestUtils.create_valid_transaction()],
+        2
+      )
+
+    chain = CryptoCoin.Blockchain.add(second, chain)
+    chain = CryptoCoin.Blockchain.add(third, chain)
+
     assert CryptoCoin.Blockchain.is_valid(chain) == false
   end
 
@@ -60,7 +103,7 @@ defmodule BlockchainTest do
   end
 
   test "unspent transactions" do
-    chain = TestUtils.create_valid_blockchan()
+    chain = TestUtils.create_valid_blockchain2()
     utxos = CryptoCoin.Blockchain.unspent_transactions("key1", "key1", chain)
     assert length(utxos) == 1
 

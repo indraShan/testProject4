@@ -19,6 +19,10 @@ defmodule CryptoCoin.Transaction do
     end)
   end
 
+  def is_valid(transaction) do
+    true
+  end
+
   # Returns outputs where the private key can be used to unlock
   # the unit
   def get_outputs(transaction, private_key) do

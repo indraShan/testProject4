@@ -7,7 +7,7 @@ defmodule WalletTest do
   end
 
   test "wallet blockchain update", %{wallet: wallet} do
-    chain = TestUtils.create_valid_blockchan()
+    chain = TestUtils.create_valid_blockchain2()
     CryptoCoin.Wallet.handle_blockchain_broadcast(wallet, chain)
 
     CryptoCoin.Wallet.get_balance(wallet, self())

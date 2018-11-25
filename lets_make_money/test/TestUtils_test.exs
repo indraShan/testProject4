@@ -1,9 +1,64 @@
 defmodule TestUtils do
-  def create_valid_blockchan() do
-    first = CryptoCoin.Block.create("first_block", nil, 2, [create_valid_transaction()], 3)
+  def create_empty_blockchain() do
+    CryptoCoin.Blockchain.create()
+  end
+
+  def create_valid_block() do
+    CryptoCoin.Block.create(
+      "0F74BE448F6DC9D646ACB7656B2895BBF85FBD4035E3C60705A2F4EA788CE01B",
+      nil,
+      1,
+      [],
+      1
+    )
+  end
+
+  def create_valid_blockchain() do
+    first = create_valid_block()
+    CryptoCoin.Blockchain.create(first)
+  end
+
+  def create_valid_blockchain1() do
+    first = create_valid_block()
     chain = CryptoCoin.Blockchain.create(first)
-    second = CryptoCoin.Block.create("second_block", first, 2, create_valid_transactions(), 3)
+
+    second =
+      CryptoCoin.Block.create(
+        "009C71591CED1C40DDF5C50DE260CCD6F043C54BDC48349C581D85FAFAD06E97",
+        first,
+        690,
+        [TestUtils.create_valid_transaction()],
+        2
+      )
+
     CryptoCoin.Blockchain.add(second, chain)
+  end
+
+  def create_valid_blockchain2() do
+    first = create_valid_block()
+    chain = CryptoCoin.Blockchain.create(first)
+
+    second =
+      CryptoCoin.Block.create(
+        "009C71591CED1C40DDF5C50DE260CCD6F043C54BDC48349C581D85FAFAD06E97",
+        first,
+        690,
+        [TestUtils.create_valid_transaction()],
+        2
+      )
+
+    chain = CryptoCoin.Blockchain.add(second, chain)
+
+    third =
+      CryptoCoin.Block.create(
+        "0065943F7C84431D3B12136BD49332448696CA6A4519CC1A97936211ECF47433",
+        second,
+        900,
+        create_valid_transactions(),
+        2
+      )
+
+    CryptoCoin.Blockchain.add(third, chain)
   end
 
   def create_valid_transaction() do

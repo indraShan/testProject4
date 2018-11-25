@@ -1,4 +1,8 @@
 defmodule CryptoCoin.Blockchain do
+  def create() do
+    %{}
+  end
+
   def create(block) do
     %{1 => block}
   end
@@ -10,7 +14,12 @@ defmodule CryptoCoin.Blockchain do
 
   def get_last_block(chain) do
     size = Map.size(chain)
-    Map.get(chain, size)
+
+    if size != 0 do
+      Map.get(chain, size)
+    else
+      nil
+    end
   end
 
   def unspent_transactions(public_key, private_key, chain) do

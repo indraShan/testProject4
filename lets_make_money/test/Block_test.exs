@@ -6,6 +6,11 @@ defmodule BlockTest do
     assert block != nil
   end
 
+  test "verify get_nonce" do
+    block = CryptoCoin.Block.create("first_block", nil, 2, nil, 3)
+    assert CryptoCoin.Block.get_nonce(block) == 2
+  end
+
   test "verify_block_parent" do
     first = CryptoCoin.Block.create("first_block", nil, 2, nil, 3)
     second = CryptoCoin.Block.create("second_block", first, 2, nil, 3)
@@ -15,10 +20,16 @@ defmodule BlockTest do
     assert CryptoCoin.Block.verify_block_parent(third, second) == false
   end
 
+  test "verify is_valid" do
+    block = TestUtils.create_valid_block()
+    assert CryptoCoin.Block.is_valid(block) == true
+  end
+
   test "verify get transactions" do
-    transaction = TestUtils.create_valid_transaction()
-    block = CryptoCoin.Block.create("first_block", nil, 2, [transaction], 3)
+    chain = TestUtils.create_valid_blockchain1()
+    block = CryptoCoin.Blockchain.get_last_block(chain)
 
     assert length(CryptoCoin.Block.get_trasactions(block)) == 1
+    assert CryptoCoin.Block.is_valid(block) == true
   end
 end

@@ -1,15 +1,59 @@
 defmodule CryptoCoin.Miner do
-  def start(node) do
-    Task.start(fn -> wait(node) end)
+  def start(caller) do
+    Task.start(fn -> wait(caller) end)
   end
 
-  defp wait(node) do
+  # private methods
+  defp wait(caller) do
     receive do
-      {:mine} ->
-        wait(node)
+      {:mine, blockchain, transactions, diff} ->
+        block = mine(blockchain, transactions, diff, caller)
+        send(caller, {:found_a_block, blockchain, block})
+        wait(caller)
+    end
+  end
 
-      {:stop} ->
-        IO.puts("Miner done")
+  # Starts mining to find a new block.
+  def mine(blockchain, transactions, diff, caller) do
+    last_block = CryptoCoin.Blockchain.get_last_block(blockchain)
+
+    nonce =
+      if last_block != nil do
+        CryptoCoin.Block.get_nonce(last_block)
+      else
+        1
+      end
+
+    prev_hash =
+      if last_block != nil do
+        CryptoCoin.Block.get_hash(last_block)
+      else
+        CryptoCoin.Block.genesis_string()
+      end
+
+    {hash, found_nonce} =
+      mine(
+        prev_hash,
+        CryptoCoin.Utils.encode(transactions),
+        CryptoCoin.Utils.prefixStringForDifficultyLevel(diff),
+        nonce,
+        caller
+      )
+
+    CryptoCoin.Block.create(hash, last_block, found_nonce, transactions, diff)
+  end
+
+  defp mine(prev_hash, transactions, diff, nonce, caller) do
+    data = prev_hash <> transactions <> Integer.to_string(nonce)
+    hash = CryptoCoin.Utils.hash(data)
+    prefix = String.slice(hash, 0, String.length(diff))
+
+    if prefix == diff do
+      # Found the hash matching the given diff level
+      {hash, nonce}
+    else
+      # Increase nonce and try again :(
+      mine(prev_hash, transactions, diff, nonce + 1, caller)
     end
   end
 end
