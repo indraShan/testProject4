@@ -19,6 +19,17 @@ defmodule BlockchainTest do
     assert CryptoCoin.Blockchain.get_last_block(chain) == second
   end
 
+  test "chain length" do
+    block = CryptoCoin.Block.create("first_block", nil, 2, nil, 3)
+    chain = CryptoCoin.Blockchain.create(block)
+    assert CryptoCoin.Blockchain.chain_length(chain) == 1
+
+    second = CryptoCoin.Block.create("second_block", block, 2, nil, 3)
+    chain = CryptoCoin.Blockchain.add(second, chain)
+
+    assert CryptoCoin.Blockchain.chain_length(chain) == 2
+  end
+
   test "blockchain is valid 1" do
     assert CryptoCoin.Blockchain.is_valid(TestUtils.create_valid_blockchain()) == true
   end

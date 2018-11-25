@@ -9,6 +9,7 @@ defmodule CryptoCoin.TransactionUnit do
     output |> Map.get("unique_id")
   end
 
+
   def get_amount(unit) do
     unit |> Map.get("amount")
   end

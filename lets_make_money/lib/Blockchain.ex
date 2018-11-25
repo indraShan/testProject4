@@ -12,6 +12,10 @@ defmodule CryptoCoin.Blockchain do
     Map.put(chain, size + 1, block)
   end
 
+  def chain_length(chain) do
+    Map.size(chain)
+  end
+
   def get_last_block(chain) do
     size = Map.size(chain)
 
