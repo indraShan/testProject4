@@ -48,7 +48,7 @@ defmodule WalletTest do
 
   test "wallet1->2 validate send money amount", %{wallet1: wallet, wallet2: wallet2} do
     # IO.puts "Checking validate send money"
-    CryptoCoin.Wallet.send_money_validate(wallet, wallet2, 1, self())
+    CryptoCoin.Wallet.send_money_validate(wallet, wallet2, 1.2, self())
     assert_receive {:send_money_valid, [2]}, 100
   end
 
