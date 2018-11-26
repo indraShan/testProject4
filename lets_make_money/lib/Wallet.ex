@@ -49,7 +49,7 @@ defmodule CryptoCoin.Wallet do
     utxos = state.unspent_transactions
     inputs = check_send_money_valid(amount, utxos)
     inputs = 
-    Enum.map(inputs, fn x -> Map.get(x, "amount") end)
+    Enum.map(inputs, fn x -> CryptoCoin.TransactionUnit.get_amount(x) end)
 
     send(caller, {:send_money_valid, inputs})
     {:noreply, state}
@@ -57,17 +57,21 @@ defmodule CryptoCoin.Wallet do
 
   defp check_send_money_valid(amount, utxos) do
     if(length(utxos)>0) do
-      valid_utxos = Enum.sort(utxos, &(Map.get(&1, "amount") <= Map.get(&2, "amount")))
-      # IO.inspect valid_utxos
+      #sort utxos in ascending order
+      valid_utxos = Enum.sort(utxos, &(CryptoCoin.TransactionUnit.get_amount(&1) <= CryptoCoin.TransactionUnit.get_amount(&2)))
+
       [last] = Enum.take(valid_utxos, -1)
 
-      if Map.get(last, "amount") == amount do
+      # if largest element's amount equals amount to be sent, no need to iterate
+      if CryptoCoin.TransactionUnit.get_amount(last) == amount do
         [last]
+      
+      # else, iterate over list by accumulating transaction values 
       else
         {utx_list, total} = 
         Enum.flat_map_reduce(valid_utxos, 0, fn x, acc ->
-          if Map.get(x, "amount") + acc < amount do
-            {[x], Map.get(x, "amount") + acc}
+          if CryptoCoin.TransactionUnit.get_amount(x) + acc < amount do
+            {[x], CryptoCoin.TransactionUnit.get_amount(x) + acc}
           else
             {:halt, acc}
           end

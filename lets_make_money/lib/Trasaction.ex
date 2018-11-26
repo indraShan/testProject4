@@ -20,7 +20,16 @@ defmodule CryptoCoin.Transaction do
   end
 
   def is_valid(transaction) do
-    true
+    inputs = CryptoCoin.Transaction.get_inputs(transaction)
+    outputs = CryptoCoin.Transaction.get_outputs(transaction)
+
+    input_val = Enum.reduce(inputs, 0, fn x, acc -> x + acc end)
+    output_val = Enum.reduce(outputs, 0, fn x, acc -> x + acc end)
+    if input_val >= output_val do
+      true
+    else
+      false
+    end
   end
 
   # Returns outputs where the private key can be used to unlock
