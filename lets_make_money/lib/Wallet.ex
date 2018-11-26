@@ -27,6 +27,10 @@ defmodule CryptoCoin.Wallet do
     GenServer.cast(pid, {:get_balance, caller})
   end
 
+  def send_money_validate(pid, recepient, amount,  caller) do
+    GenServer.cast(pid, {:send_money_validate, recepient, amount, caller})
+  end
+
   # Private methods
   def handle_info({:handle_blockchain_broadcast, chain}, state) do
     # For now go through the entire blockchain.
@@ -42,6 +46,58 @@ defmodule CryptoCoin.Wallet do
   def handle_cast({:get_balance, caller}, state) do
     send(caller, {:current_balance, availableBalance(state.unspent_transactions)})
     {:noreply, state}
+  end
+
+  def handle_cast({:send_money_validate, recepient, amount, caller}, state) do
+    utxos = state.unspent_transactions
+    inputs = check_send_money_valid(amount, utxos)
+    inputs = 
+    Enum.map(inputs, fn x -> CryptoCoin.TransactionUnit.get_amount(x) end)
+
+    send(caller, {:send_money_valid, inputs})
+    {:noreply, state}
+  end
+
+  defp check_send_money_valid(amount, utxos) do
+    if(length(utxos)>0) do
+      #sort utxos in ascending order
+      valid_utxos = Enum.sort(utxos, &(CryptoCoin.TransactionUnit.get_amount(&1) <= CryptoCoin.TransactionUnit.get_amount(&2)))
+
+      [last] = Enum.take(valid_utxos, -1)
+
+      # if largest element's amount equals amount to be sent, no need to iterate
+      if CryptoCoin.TransactionUnit.get_amount(last) == amount do
+        [last]
+      
+      # else, iterate over list by accumulating transaction values 
+      else
+        {utx_list, total} = 
+        Enum.flat_map_reduce(valid_utxos, 0, fn x, acc ->
+          if CryptoCoin.TransactionUnit.get_amount(x) + acc < amount do
+            {[x], CryptoCoin.TransactionUnit.get_amount(x) + acc}
+          else
+            {:halt, acc}
+          end
+        end)
+
+        # IO.inspect utx_list
+        list_size = length(utx_list)
+        if total < amount do
+          if length(valid_utxos) > list_size do
+            utx_list ++ [Enum.at(valid_utxos, list_size)]
+          else
+            []
+          end
+
+        # else condition will only be executed when total == amount
+        # total > amount should never be encountered 
+        else
+          utx_list
+        end
+      end
+    else
+      []
+    end
   end
 
   defp availableBalance(utxos) do
