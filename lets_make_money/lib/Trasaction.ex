@@ -41,11 +41,7 @@ defmodule CryptoCoin.Transaction do
       CryptoCoin.TransactionUnit.is_owned_by(input, public_key)
     end)
   end
-
-<<<<<<< HEAD
-  def is_valid(_trasaction) do
-    true
-=======
+  
   def is_valid(transaction) do
     inputs = CryptoCoin.Transaction.get_inputs(transaction)
     outputs = CryptoCoin.Transaction.get_outputs(transaction)
@@ -57,7 +53,6 @@ defmodule CryptoCoin.Transaction do
     else
       false
     end
->>>>>>> send-money
   end
 
   # Returns outputs where the private key can be used to unlock
