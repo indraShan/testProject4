@@ -13,6 +13,18 @@ defmodule TestUtils do
     )
   end
 
+  def create_valid_block2() do
+    first = create_valid_block()
+
+    CryptoCoin.Block.create(
+      "009C71591CED1C40DDF5C50DE260CCD6F043C54BDC48349C581D85FAFAD06E97",
+      first,
+      690,
+      [TestUtils.create_valid_transaction()],
+      2
+    )
+  end
+
   def create_valid_blockchain() do
     first = create_valid_block()
     CryptoCoin.Blockchain.create(first)

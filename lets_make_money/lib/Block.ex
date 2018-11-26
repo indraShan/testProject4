@@ -23,6 +23,11 @@ defmodule CryptoCoin.Block do
     }
   end
 
+  def is_equal(block1, block2) do
+    # For now just check if hashes match
+    get_hash(block1) == get_hash(block2)
+  end
+
   def get_hash(block) do
     block |> Map.get("hash")
   end

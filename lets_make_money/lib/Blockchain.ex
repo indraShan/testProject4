@@ -26,6 +26,19 @@ defmodule CryptoCoin.Blockchain do
     end
   end
 
+  def is_equal(chain1, chain2) do
+    size1 = chain_length(chain1)
+    size2 = chain_length(chain2)
+    is_equal = size1 == size2
+
+    if is_equal == true and size1 != 0 do
+      # For now just compare if the last blocks are equal
+      CryptoCoin.Block.is_equal(get_last_block(chain1), get_last_block(chain2))
+    else
+      is_equal
+    end
+  end
+
   def unspent_transactions(public_key, private_key, chain) do
     transactions = get_trasactions(chain)
 
@@ -60,12 +73,11 @@ defmodule CryptoCoin.Blockchain do
   def get_trasactions(chain) do
     keys = Map.keys(chain)
 
-    trasactions =
-      Enum.reduce(keys, [], fn key, acc ->
-        block = chain |> Map.get(key)
-        trasactions = block |> CryptoCoin.Block.get_trasactions()
-        trasactions ++ acc
-      end)
+    Enum.reduce(keys, [], fn key, acc ->
+      block = chain |> Map.get(key)
+      trasactions = block |> CryptoCoin.Block.get_trasactions()
+      trasactions ++ acc
+    end)
   end
 
   def is_valid(chain) do

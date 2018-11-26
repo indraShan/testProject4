@@ -3,6 +3,29 @@ defmodule CryptoCoin.Transaction do
     %{"inputs" => inputs, "outputs" => outputs}
   end
 
+  def create() do
+    %{"timestamp" => :os.system_time(:millisecond), "inputs" => [], "outputs" => []}
+  end
+
+  def add_inputs(transaction, inputs) do
+    inputs = inputs ++ get_inputs(transaction)
+    transaction |> Map.put("inputs", inputs)
+  end
+
+  def add_outputs(transaction, outputs) do
+    outputs = outputs ++ get_outputs(transaction)
+    transaction |> Map.put("outputs", outputs)
+  end
+
+  def add_transaction_output(transaction, key, amount) do
+    outputs = get_outputs(transaction)
+    output_data = CryptoCoin.Utils.encode(transaction) <> Integer.to_string(length(outputs))
+    output_id = CryptoCoin.Utils.hash(output_data)
+    output = CryptoCoin.TransactionUnit.create(key, amount, output_id)
+    outputs = outputs ++ [output]
+    add_outputs(transaction, outputs)
+  end
+
   def get_inputs(transaction) do
     transaction |> Map.get("inputs")
   end
@@ -19,7 +42,7 @@ defmodule CryptoCoin.Transaction do
     end)
   end
 
-  def is_valid(transaction) do
+  def is_valid(_trasaction) do
     true
   end
 

@@ -11,14 +11,15 @@ defmodule CryptoCoin.Wallet do
     state = %{
       public_key: opts[:public_key],
       private_key: opts[:private_key],
-      block_chain: nil
+      block_chain: nil,
+      unspent_transactions: []
     }
 
     {:ok, state}
   end
 
   def handle_blockchain_broadcast(pid, chain) do
-    GenServer.cast(pid, {:handle_blockchain_broadcast, chain})
+    send(pid, {:handle_blockchain_broadcast, chain})
   end
 
   def get_balance(pid, caller) do
@@ -27,12 +28,14 @@ defmodule CryptoCoin.Wallet do
   end
 
   # Private methods
-  def handle_cast({:handle_blockchain_broadcast, chain}, state) do
+  def handle_info({:handle_blockchain_broadcast, chain}, state) do
     # For now go through the entire blockchain.
     # May be there is a better way.
     state = state |> Map.put(:block_chain, chain)
+
     unspent_transactions = unspent_transactions(state.public_key, state.private_key, chain)
     state = state |> Map.put(:unspent_transactions, unspent_transactions)
+
     {:noreply, state}
   end
 
@@ -48,6 +51,10 @@ defmodule CryptoCoin.Wallet do
   end
 
   defp unspent_transactions(public_key, private_key, chain) do
-    CryptoCoin.Blockchain.unspent_transactions(public_key, private_key, chain)
+    if chain != nil do
+      CryptoCoin.Blockchain.unspent_transactions(public_key, private_key, chain)
+    else
+      []
+    end
   end
 end

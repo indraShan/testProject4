@@ -25,6 +25,15 @@ defmodule BlockTest do
     assert CryptoCoin.Block.is_valid(block) == true
   end
 
+  test "verify is_equal" do
+    block1 = TestUtils.create_valid_block()
+    block2 = TestUtils.create_valid_block()
+    assert CryptoCoin.Block.is_equal(block2, block1) == true
+
+    block3 = TestUtils.create_valid_block2()
+    assert CryptoCoin.Block.is_equal(block3, block1) == false
+  end
+
   test "verify get transactions" do
     chain = TestUtils.create_valid_blockchain1()
     block = CryptoCoin.Blockchain.get_last_block(chain)
