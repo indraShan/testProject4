@@ -26,8 +26,8 @@ defmodule CryptoCoin.Wallet do
     GenServer.cast(pid, {:get_balance, caller})
   end
 
-  def send_money(pid, caller, recepient, amount) do
-    
+  def send_money_validate(pid, recepient, amount,  caller) do
+    GenServer.cast(pid, {:send_money_validate, recepient, amount, caller})
   end
 
   # Private methods
@@ -45,19 +45,29 @@ defmodule CryptoCoin.Wallet do
     {:noreply, state}
   end
 
-  def check_send_money_valid(amount, utxos) do
+  def handle_cast({:send_money_validate, recepient, amount, caller}, state) do
+    utxos = state.unspent_transactions
+    inputs = check_send_money_valid(amount, utxos)
+    inputs = 
+    Enum.map(inputs, fn x -> Map.get(x, "amount") end)
+
+    send(caller, {:send_money_valid, inputs})
+    {:noreply, state}
+  end
+
+  defp check_send_money_valid(amount, utxos) do
     if(length(utxos)>0) do
-      valid_utxos = Enum.sort(utxos, &(&1.amount <= &2.amount))
+      valid_utxos = Enum.sort(utxos, &(Map.get(&1, "amount") <= Map.get(&2, "amount")))
       # IO.inspect valid_utxos
       [last] = Enum.take(valid_utxos, -1)
 
-      if Map.get(last, :amount) == amount do
+      if Map.get(last, "amount") == amount do
         [last]
       else
         {utx_list, total} = 
         Enum.flat_map_reduce(valid_utxos, 0, fn x, acc ->
-          if x.amount + acc < amount do
-            {[x], x.amount + acc}
+          if Map.get(x, "amount") + acc < amount do
+            {[x], Map.get(x, "amount") + acc}
           else
             {:halt, acc}
           end
@@ -73,7 +83,7 @@ defmodule CryptoCoin.Wallet do
           end
 
         # else condition will only be executed when total == amount
-        # total > amount will never be encountered 
+        # total > amount should never be encountered 
         else
           utx_list
         end
