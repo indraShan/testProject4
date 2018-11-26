@@ -46,9 +46,20 @@ defmodule CryptoCoin.Transaction do
     inputs = CryptoCoin.Transaction.get_inputs(transaction)
     outputs = CryptoCoin.Transaction.get_outputs(transaction)
 
-    input_val = Enum.reduce(inputs, 0, fn x, acc -> x + acc end)
-    output_val = Enum.reduce(outputs, 0, fn x, acc -> x + acc end)
-    if input_val >= output_val do
+    input_val = Enum.reduce(inputs, 0, fn x, acc -> CryptoCoin.TransactionUnit.get_amount(x) + acc end)
+    output_val = Enum.reduce(outputs, 0, fn x, acc -> CryptoCoin.TransactionUnit.get_amount(x) + acc end)
+
+    inputs_check_id = Enum.filter(inputs, fn x -> CryptoCoin.TransactionUnit.get_unique_id(x) != nil end)
+    outputs_check_id = Enum.filter(outputs, fn x -> CryptoCoin.TransactionUnit.get_unique_id(x) != nil end)
+    
+    id_valid =
+    if(length(inputs_check_id) == length(inputs) and length(outputs_check_id) == length(outputs)) do
+      true
+    else
+      false
+    end
+
+    if input_val >= output_val and id_valid == true do
       true
     else
       false
