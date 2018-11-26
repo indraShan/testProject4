@@ -26,6 +26,10 @@ defmodule CryptoCoin.Wallet do
     GenServer.cast(pid, {:get_balance, caller})
   end
 
+  def send_money(pid, caller, recepient, amount) do
+    
+  end
+
   # Private methods
   def handle_cast({:handle_blockchain_broadcast, chain}, state) do
     # For now go through the entire blockchain.
@@ -39,6 +43,44 @@ defmodule CryptoCoin.Wallet do
   def handle_cast({:get_balance, caller}, state) do
     send(caller, {:current_balance, availableBalance(state.unspent_transactions)})
     {:noreply, state}
+  end
+
+  def check_send_money_valid(amount, utxos) do
+    if(length(utxos)>0) do
+      valid_utxos = Enum.sort(utxos, &(&1.amount <= &2.amount))
+      # IO.inspect valid_utxos
+      [last] = Enum.take(valid_utxos, -1)
+
+      if Map.get(last, :amount) == amount do
+        [last]
+      else
+        {utx_list, total} = 
+        Enum.flat_map_reduce(valid_utxos, 0, fn x, acc ->
+          if x.amount + acc < amount do
+            {[x], x.amount + acc}
+          else
+            {:halt, acc}
+          end
+        end)
+
+        # IO.inspect utx_list
+        list_size = length(utx_list)
+        if total < amount do
+          if length(valid_utxos) > list_size do
+            utx_list ++ [Enum.at(valid_utxos, list_size)]
+          else
+            []
+          end
+
+        # else condition will only be executed when total == amount
+        # total > amount will never be encountered 
+        else
+          utx_list
+        end
+      end
+    else
+      []
+    end
   end
 
   defp availableBalance(utxos) do
