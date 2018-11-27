@@ -46,39 +46,106 @@ defmodule WalletTest do
     assert_receive {:current_balance, 35}, 100
   end
 
-  test "wallet1->2 validate send money amount", %{wallet1: wallet, wallet2: wallet2} do
+  test "wallet1->2 validate send money amount" do
     # IO.puts "Checking validate send money"
-    CryptoCoin.Wallet.send_money_validate(wallet, wallet2, 1.2, self())
-    assert_receive {:send_money_valid, [2]}, 100
+    chain = TestUtils.create_valid_blockchain2()
+    utxos = CryptoCoin.Blockchain.unspent_transactions("key1", "key1", chain)
+    inputs = CryptoCoin.Wallet.send_money_validate(1.2, utxos)
+    
+    assert Enum.map(inputs, fn x -> CryptoCoin.TransactionUnit.get_amount(x) end) == [2]
   end
 
-  test "wallet2->1 validate send money amount", %{wallet2: wallet2, wallet1: wallet} do
+  test "wallet2->1 validate send money amount" do
     # IO.puts "Checking negative amount transfer"
-    CryptoCoin.Wallet.send_money_validate(wallet2, wallet, -2, self())
-    assert_receive {:send_money_valid, []}, 100
+    chain = TestUtils.create_valid_blockchain2()
+    utxos = CryptoCoin.Blockchain.unspent_transactions("key2", "key2", chain)
+    inputs = CryptoCoin.Wallet.send_money_validate(-2, utxos)
+    assert Enum.map(inputs, fn x -> CryptoCoin.TransactionUnit.get_amount(x) end) == []
   end
 
-  test "wallet3->1 validate send money amount", %{wallet3: wallet3, wallet1: wallet} do
+  test "wallet3->1 validate send money amount" do
     # IO.puts "Checking validate send money for wallet3"
-    CryptoCoin.Wallet.send_money_validate(wallet3, wallet, 7, self())
-    assert_receive {:send_money_valid, [5, 10]}, 100
+    chain = TestUtils.create_valid_blockchain2()
+    utxos = CryptoCoin.Blockchain.unspent_transactions("key3", "key3", chain)
+    inputs = CryptoCoin.Wallet.send_money_validate(7, utxos)
+    assert Enum.map(inputs, fn x -> CryptoCoin.TransactionUnit.get_amount(x) end) == [5, 10]
   end
 
-  test "wallet2->3 validate send money amount", %{wallet3: wallet3, wallet2: wallet2} do
+  test "wallet2->3 validate send money amount" do
     # IO.puts "Checking validate send money for wallet2"
-    CryptoCoin.Wallet.send_money_validate(wallet2, wallet3, 3, self())
-    assert_receive {:send_money_valid, [3]}, 100
+    chain = TestUtils.create_valid_blockchain2()
+    utxos = CryptoCoin.Blockchain.unspent_transactions("key2", "key2", chain)
+    inputs = CryptoCoin.Wallet.send_money_validate(3, utxos)
+    assert Enum.map(inputs, fn x -> CryptoCoin.TransactionUnit.get_amount(x) end) == [3]
   end
 
-  test "wallet1->3 validate send money amount", %{wallet3: wallet3, wallet1: wallet} do
+  test "wallet1->3 validate send money amount" do
     # IO.puts "Checking overdraft on wallet1"
-    CryptoCoin.Wallet.send_money_validate(wallet, wallet3, 10, self())
-    assert_receive {:send_money_valid, []}, 100
+    chain = TestUtils.create_valid_blockchain2()
+    utxos = CryptoCoin.Blockchain.unspent_transactions("key1", "key1", chain)
+    inputs = CryptoCoin.Wallet.send_money_validate(10, utxos)
+    assert Enum.map(inputs, fn x -> CryptoCoin.TransactionUnit.get_amount(x) end) == []
   end
 
-  test "wallet3->2 validate send money amount", %{wallet3: wallet3, wallet2: wallet2} do
-    # IO.puts "Checking validate send money for wallet2"
-    CryptoCoin.Wallet.send_money_validate(wallet3, wallet2, 17, self())
-    assert_receive {:send_money_valid, [5, 10, 20]}, 100
+  test "wallet3->2 validate send money amount" do
+    # IO.puts "Checking validate send money for wallet3"
+    chain = TestUtils.create_valid_blockchain2()
+    utxos = CryptoCoin.Blockchain.unspent_transactions("key3", "key3", chain)
+    inputs = CryptoCoin.Wallet.send_money_validate(17, utxos)
+    assert Enum.map(inputs, fn x -> CryptoCoin.TransactionUnit.get_amount(x) end) == [5, 10, 20]
+  end
+
+  test "wallet3->2 outputs" do
+    # IO.puts "Checking outputs"
+    chain = TestUtils.create_valid_blockchain2()
+    utxos = CryptoCoin.Blockchain.unspent_transactions("key3", "key3", chain)
+    inputs = CryptoCoin.Wallet.send_money_validate(17, utxos)
+    outputs = CryptoCoin.Wallet.generate_outputs("key3", "key2", inputs, 17)
+    assert outputs == %{"key2" => [5,10,2], "key3" => [18]}
+  end
+
+  test "wallet1->2 outputs" do
+    # IO.puts "Checking outputs"
+    chain = TestUtils.create_valid_blockchain2()
+    utxos = CryptoCoin.Blockchain.unspent_transactions("key1", "key1", chain)
+    inputs = CryptoCoin.Wallet.send_money_validate(10, utxos)
+    outputs = CryptoCoin.Wallet.generate_outputs("key1", "key2", inputs, 10)
+    assert outputs == %{}
+  end
+
+  test "wallet1->3 outputs" do
+    # IO.puts "Checking outputs"
+    chain = TestUtils.create_valid_blockchain2()
+    utxos = CryptoCoin.Blockchain.unspent_transactions("key1", "key1", chain)
+    inputs = CryptoCoin.Wallet.send_money_validate(1.2, utxos)
+    outputs = CryptoCoin.Wallet.generate_outputs("key1", "key3", inputs, 1.2)
+    assert outputs == %{"key1" => [0.8], "key3" => [1.2]}
+  end
+
+  test "wallet2->1 outputs" do
+    # IO.puts "Checking outputs"
+    chain = TestUtils.create_valid_blockchain2()
+    utxos = CryptoCoin.Blockchain.unspent_transactions("key2", "key2", chain)
+    inputs = CryptoCoin.Wallet.send_money_validate(-10, utxos)
+    outputs = CryptoCoin.Wallet.generate_outputs("key2", "key1", inputs, -10)
+    assert outputs == %{}
+  end
+
+  test "wallet2->3 outputs" do
+    # IO.puts "Checking outputs"
+    chain = TestUtils.create_valid_blockchain2()
+    utxos = CryptoCoin.Blockchain.unspent_transactions("key2", "key2", chain)
+    inputs = CryptoCoin.Wallet.send_money_validate(23, utxos)
+    outputs = CryptoCoin.Wallet.generate_outputs("key2", "key3", inputs, 23)
+    assert outputs == %{"key2" => [0], "key3" => [3, 20]}
+  end
+
+  test "wallet3->1 outputs" do
+    # IO.puts "Checking outputs for 15 in key3"
+    chain = TestUtils.create_valid_blockchain2()
+    utxos = CryptoCoin.Blockchain.unspent_transactions("key3", "key3", chain)
+    inputs = CryptoCoin.Wallet.send_money_validate(15, utxos)
+    outputs = CryptoCoin.Wallet.generate_outputs("key3", "key1", inputs, 15)
+    assert outputs == %{"key1" => [5, 10], "key3" => [0]}
   end
 end

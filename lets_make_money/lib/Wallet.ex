@@ -27,11 +27,6 @@ defmodule CryptoCoin.Wallet do
     GenServer.cast(pid, {:get_balance, caller})
   end
 
-  def send_money_validate(pid, recepient, amount,  caller) do
-    GenServer.cast(pid, {:send_money_validate, recepient, amount, caller})
-  end
-
-  # Private methods
   def handle_info({:handle_blockchain_broadcast, chain}, state) do
     # For now go through the entire blockchain.
     # May be there is a better way.
@@ -48,32 +43,68 @@ defmodule CryptoCoin.Wallet do
     {:noreply, state}
   end
 
-  def handle_cast({:send_money_validate, recepient, amount, caller}, state) do
-    utxos = state.unspent_transactions
-    inputs = check_send_money_valid(amount, utxos)
-    inputs = 
-    Enum.map(inputs, fn x -> CryptoCoin.TransactionUnit.get_amount(x) end)
+  # Private methods
+  def generate_outputs(sender, recepient, inputs, amount) do
+    if(length(inputs)>0) do
+      {recepient_utxos, total} =
+      Enum.flat_map_reduce(inputs, 0, fn x, acc ->
+        if CryptoCoin.TransactionUnit.get_amount(x) + acc <= amount do
+          {[x], CryptoCoin.TransactionUnit.get_amount(x) + acc}
+        else
+          {:halt, acc}
+        end
+      end)
 
-    send(caller, {:send_money_valid, inputs})
-    {:noreply, state}
+      sender_utxos = inputs -- recepient_utxos
+
+      sender_money = 
+      Enum.map(sender_utxos, fn x -> CryptoCoin.TransactionUnit.get_amount(x) end)
+      recepient_money = 
+      Enum.map(recepient_utxos, fn x -> CryptoCoin.TransactionUnit.get_amount(x) end)
+
+      # IO.inspect sender_money
+      # IO.inspect recepient_money
+      # IO.puts "#{total}"
+
+      # if sender_money is empty list, following condition should never ideally be true
+      if(total < amount) do
+        val = Enum.at(sender_money, 0)
+        break_val = amount - total
+        adjust_val = val - break_val
+        # IO.puts "#{break_val}"
+        # IO.puts "#{adjust_val} ********************"
+
+        recepient_money = recepient_money ++ [break_val]
+        sender_money = List.delete_at(sender_money, 0)
+        sender_money = [adjust_val] ++ sender_money
+        # IO.inspect sender_money
+        # IO.inspect recepient_money
+        %{recepient => recepient_money, sender => sender_money}
+      else
+        %{recepient => recepient_money, sender => [0] ++ sender_money}
+      end
+    else
+      %{}
+    end
   end
-
-  defp check_send_money_valid(amount, utxos) do
+  
+  def send_money_validate(amount, utxos) do
     if(length(utxos)>0) do
       #sort utxos in ascending order
       valid_utxos = Enum.sort(utxos, &(CryptoCoin.TransactionUnit.get_amount(&1) <= CryptoCoin.TransactionUnit.get_amount(&2)))
 
-      [last] = Enum.take(valid_utxos, -1)
+      # [last] = Enum.take(valid_utxos, -1)
+      last_element = List.last(valid_utxos)
 
       # if largest element's amount equals amount to be sent, no need to iterate
-      if CryptoCoin.TransactionUnit.get_amount(last) == amount do
-        [last]
+      if CryptoCoin.TransactionUnit.get_amount(last_element) == amount do
+        [last_element]
       
       # else, iterate over list by accumulating transaction values 
       else
         {utx_list, total} = 
         Enum.flat_map_reduce(valid_utxos, 0, fn x, acc ->
-          if CryptoCoin.TransactionUnit.get_amount(x) + acc < amount do
+          if CryptoCoin.TransactionUnit.get_amount(x) + acc <= amount do
             {[x], CryptoCoin.TransactionUnit.get_amount(x) + acc}
           else
             {:halt, acc}
