@@ -13,7 +13,11 @@ defmodule CryptoCoin.Blockchain do
   end
 
   def chain_length(chain) do
-    Map.size(chain)
+    if chain == nil do
+      0
+    else
+      Map.size(chain)
+    end
   end
 
   def get_last_block(chain) do

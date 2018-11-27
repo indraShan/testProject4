@@ -51,7 +51,7 @@ defmodule WalletTest do
     chain = TestUtils.create_valid_blockchain2()
     utxos = CryptoCoin.Blockchain.unspent_transactions("key1", "key1", chain)
     inputs = CryptoCoin.Wallet.send_money_validate(1.2, utxos)
-    
+
     assert Enum.map(inputs, fn x -> CryptoCoin.TransactionUnit.get_amount(x) end) == [2]
   end
 
@@ -101,7 +101,7 @@ defmodule WalletTest do
     utxos = CryptoCoin.Blockchain.unspent_transactions("key3", "key3", chain)
     inputs = CryptoCoin.Wallet.send_money_validate(17, utxos)
     outputs = CryptoCoin.Wallet.generate_outputs("key3", "key2", inputs, 17)
-    assert outputs == %{"key2" => [5,10,2], "key3" => [18]}
+    assert outputs == %{"key2" => [5, 10, 2], "key3" => [18]}
   end
 
   test "wallet1->2 outputs" do

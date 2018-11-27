@@ -17,10 +17,6 @@ defmodule CryptoCoin.FullNode do
     GenServer.cast(pid, {:add_peer, peerId})
   end
 
-  def handle_blockchain_broadcast(pid, chain) do
-    GenServer.cast(pid, {:handle_blockchain_broadcast, chain})
-  end
-
   # Tries to extend the blockchain by including this
   # set of transactions into a new block.
   def confirm_trasactions(pid, trasactions) do
@@ -35,15 +31,19 @@ defmodule CryptoCoin.FullNode do
     state = %{
       public_key: opts[:public_key],
       private_key: opts[:private_key],
-      block_chain: opts[:chain],
+      block_chain: %{},
       miner: miner,
       mining_reward: opts[:mining_reward],
       diffLevel: opts[:diff],
       peers: []
     }
 
-    if CryptoCoin.Blockchain.chain_length(opts[:chain]) == 0 do
+    chain = opts[:chain]
+
+    if chain == nil or CryptoCoin.Blockchain.chain_length(chain) == 0 do
       mine_genesis_block(state)
+    else
+      send(self(), {:handle_blockchain_broadcast, chain})
     end
 
     {:ok, state}
@@ -68,10 +68,31 @@ defmodule CryptoCoin.FullNode do
     )
   end
 
-  def handle_cast({:handle_blockchain_broadcast, _chain}, state) do
-    # If the received chain is shorter than the one this node
-    # currently has, ignore it.
-    {:noreply, state}
+  def handle_info({:handle_blockchain_broadcast, chain}, state) do
+    # Update if the new chain is longer and if its valid.
+    new_size = CryptoCoin.Blockchain.chain_length(chain)
+    old_size = CryptoCoin.Blockchain.chain_length(state.block_chain)
+
+    updated_state =
+      if new_size > old_size and CryptoCoin.Blockchain.is_valid(chain) == true do
+        # We are going to update the blockchain of this node.
+        # Shutdown the miner and create a new one.
+        # Update the blockchain.
+        # TODO: Spent transactions update.
+        reset_miner(state)
+        notifyPeers(state.peers, chain)
+        state |> Map.put(:block_chain, chain)
+      else
+        state
+      end
+
+    {:noreply, updated_state}
+  end
+
+  defp reset_miner(state) do
+    # TODO: Kill miner?
+    {:ok, miner} = CryptoCoin.Miner.start(self())
+    state |> Map.put(:miner, miner)
   end
 
   def handle_cast({:add_peer, peerId}, state) do

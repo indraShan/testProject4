@@ -29,6 +29,9 @@ defmodule TransactionTest do
 
   test "validity of transactions" do
     transactions = TestUtils.create_valid_transactions()
-    assert Enum.reduce(transactions, true, fn x, acc -> CryptoCoin.Transaction.is_valid(x) and acc end) == true
+
+    assert Enum.reduce(transactions, true, fn x, acc ->
+             CryptoCoin.Transaction.is_valid(x) and acc
+           end) == true
   end
 end

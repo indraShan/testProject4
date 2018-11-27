@@ -41,23 +41,35 @@ defmodule CryptoCoin.Transaction do
       CryptoCoin.TransactionUnit.is_owned_by(input, public_key)
     end)
   end
-  
+
   def is_valid(transaction) do
     inputs = CryptoCoin.Transaction.get_inputs(transaction)
     outputs = CryptoCoin.Transaction.get_outputs(transaction)
 
-    input_val = Enum.reduce(inputs, 0, fn x, acc -> CryptoCoin.TransactionUnit.get_amount(x) + acc end)
-    output_val = Enum.reduce(outputs, 0, fn x, acc -> CryptoCoin.TransactionUnit.get_amount(x) + acc end)
+    input_val =
+      Enum.reduce(inputs, 0, fn x, acc -> CryptoCoin.TransactionUnit.get_amount(x) + acc end)
 
-    inputs_check = Enum.filter(inputs, fn x -> CryptoCoin.TransactionUnit.get_unique_id(x) != nil and CryptoCoin.TransactionUnit.get_amount(x)>=0 end)
-    outputs_check = Enum.filter(outputs, fn x -> CryptoCoin.TransactionUnit.get_unique_id(x) != nil and CryptoCoin.TransactionUnit.get_amount(x)>=0 end)
-    
+    output_val =
+      Enum.reduce(outputs, 0, fn x, acc -> CryptoCoin.TransactionUnit.get_amount(x) + acc end)
+
+    inputs_check =
+      Enum.filter(inputs, fn x ->
+        CryptoCoin.TransactionUnit.get_unique_id(x) != nil and
+          CryptoCoin.TransactionUnit.get_amount(x) >= 0
+      end)
+
+    outputs_check =
+      Enum.filter(outputs, fn x ->
+        CryptoCoin.TransactionUnit.get_unique_id(x) != nil and
+          CryptoCoin.TransactionUnit.get_amount(x) >= 0
+      end)
+
     id_amount_valid =
-    if(length(inputs_check) == length(inputs) and length(outputs_check) == length(outputs)) do
-      true
-    else
-      false
-    end
+      if(length(inputs_check) == length(inputs) and length(outputs_check) == length(outputs)) do
+        true
+      else
+        false
+      end
 
     if input_val >= output_val and id_amount_valid == true do
       true
