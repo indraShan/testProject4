@@ -71,7 +71,7 @@ defmodule CryptoCoin.Wallet do
   end
 
   defp send_transaction(transaction, state) do
-    if state.full_node != nil do
+    if state.full_node != nil && CryptoCoin.Transaction.is_valid(transaction) == true do
       CryptoCoin.FullNode.confirm_trasaction(state.full_node, transaction)
     end
   end

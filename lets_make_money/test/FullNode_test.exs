@@ -28,9 +28,9 @@ defmodule FullNodeTest do
     CryptoCoin.Wallet.send_money(nodesWallet, "key2", 10.5)
     assert_receive {:handle_blockchain_broadcast, _}, 600
     CryptoCoin.Wallet.get_balance(walletA, self())
-    # Receiver should now have 10 coins
+    # Receiver should now have 10.5 coins
     assert_receive {:current_balance, 10.5}, 300
-    # Nodes wallet should have 500-10 balance.
+    # Nodes wallet should have 500-10.5 balance.
     CryptoCoin.Wallet.get_balance(nodesWallet, self())
     assert_receive {:current_balance, 489.5}, 300
   end

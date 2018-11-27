@@ -35,7 +35,8 @@ defmodule CryptoCoin.FullNode do
       miner: miner,
       mining_reward: opts[:mining_reward],
       diffLevel: opts[:diff],
-      peers: []
+      peers: [],
+      spent_utxos: MapSet.new([])
     }
 
     chain = opts[:chain]
@@ -95,11 +96,42 @@ defmodule CryptoCoin.FullNode do
     state |> Map.put(:miner, miner)
   end
 
+  # Returns false if the transaction contains units that are already spent
+  defp is_valid_transaction(transaction, state) do
+    inputs = CryptoCoin.Transaction.get_inputs(transaction)
+
+    spent_units_set = state.spent_utxos
+    valid_inputs = Enum.filter(inputs, fn(input) ->
+      unique_id = CryptoCoin.TransactionUnit.get_unique_id(input)
+      spent_units_set |> MapSet.member?(unique_id) == false
+    end)
+
+    length(valid_inputs) == length(inputs)
+  end
 
   def handle_cast({:confirm_trasaction, transaction}, state) do
     # TODO: What if the miner is busy?
-    send(state.miner, {:mine, state.block_chain, [transaction], state.diffLevel})
-    {:noreply, state}
+    # If the transaction is not valid, ignore it.
+    updated_state =
+      if CryptoCoin.Transaction.is_valid(transaction) == true and
+           is_valid_transaction(transaction, state) == true do
+        send(state.miner, {:mine, state.block_chain, [transaction], state.diffLevel})
+        update_spent_transation_units(transaction, state)
+      else
+        state
+      end
+
+    {:noreply, updated_state}
+  end
+
+  defp update_spent_transation_units(transaction, state) do
+    inputs = CryptoCoin.Transaction.get_inputs(transaction)
+
+    set =
+      Enum.reduce(inputs, state.spent_utxos, fn input, acc ->
+        acc |> MapSet.put(CryptoCoin.TransactionUnit.get_unique_id(input))
+      end)
+    state |> Map.put(:spent_utxos, set)
   end
 
   def handle_cast({:add_peer, peerId}, state) do
