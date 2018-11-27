@@ -19,8 +19,8 @@ defmodule CryptoCoin.FullNode do
 
   # Tries to extend the blockchain by including this
   # set of transactions into a new block.
-  def confirm_trasactions(pid, trasactions) do
-    GenServer.cast(pid, {:confirm_trasactions, trasactions})
+  def confirm_trasaction(pid, transaction) do
+    GenServer.cast(pid, {:confirm_trasaction, transaction})
   end
 
   # Private methods after this
@@ -93,6 +93,13 @@ defmodule CryptoCoin.FullNode do
     # TODO: Kill miner?
     {:ok, miner} = CryptoCoin.Miner.start(self())
     state |> Map.put(:miner, miner)
+  end
+
+
+  def handle_cast({:confirm_trasaction, transaction}, state) do
+    # TODO: What if the miner is busy?
+    send(state.miner, {:mine, state.block_chain, [transaction], state.diffLevel})
+    {:noreply, state}
   end
 
   def handle_cast({:add_peer, peerId}, state) do

@@ -12,19 +12,29 @@ defmodule CryptoCoin.Wallet do
       public_key: opts[:public_key],
       private_key: opts[:private_key],
       block_chain: nil,
-      unspent_transactions: []
+      unspent_transactions: [],
+      full_node: nil
     }
 
     {:ok, state}
   end
 
+  # Only to make testing easier.
   def handle_blockchain_broadcast(pid, chain) do
     send(pid, {:handle_blockchain_broadcast, chain})
+  end
+
+  def connected_with_full_node(pid, node) do
+    GenServer.cast(pid, {:connected_with_full_node, node})
   end
 
   def get_balance(pid, caller) do
     # IO.puts("get_balance called")
     GenServer.cast(pid, {:get_balance, caller})
+  end
+
+  def send_money(pid, receiver_key, amount) do
+    GenServer.cast(pid, {:send_money, receiver_key, amount})
   end
 
   def handle_info({:handle_blockchain_broadcast, chain}, state) do
@@ -36,6 +46,51 @@ defmodule CryptoCoin.Wallet do
     state = state |> Map.put(:unspent_transactions, unspent_transactions)
 
     {:noreply, state}
+  end
+
+  def handle_cast({:connected_with_full_node, node}, state) do
+    # Ask the node to send callbacks.
+    # IO.puts("connecting with full node")
+    CryptoCoin.FullNode.add_peer(node, self())
+    {:noreply, state |> Map.put(:full_node, node)}
+  end
+
+  def handle_cast({:send_money, receiver_key, amount}, state) do
+    available_inputs = send_money_validate(amount, state.unspent_transactions)
+    # TODO: invalid input
+    if length(available_inputs) != 0 do
+      outputs_map = generate_outputs(state.public_key, receiver_key, available_inputs, amount)
+
+      # outputs =
+      # (outputs_map |> Map.get(state.public_key)) ++ (outputs_map |> Map.get(receiver_key))
+      transaction = create_transaction(available_inputs, outputs_map)
+      send_transaction(transaction, state)
+    end
+
+    {:noreply, state}
+  end
+
+  defp send_transaction(transaction, state) do
+    if state.full_node != nil do
+      CryptoCoin.FullNode.confirm_trasaction(state.full_node, transaction)
+    end
+  end
+
+  defp create_transaction(inputs, outputs_map) do
+    transaction = CryptoCoin.Transaction.create()
+    transaction = CryptoCoin.Transaction.add_inputs(transaction, inputs)
+
+    Enum.reduce(outputs_map |> Map.keys(), transaction, fn key, acc_trans ->
+      outputs = outputs_map |> Map.get(key)
+
+      Enum.reduce(outputs, acc_trans, fn output, edit_trans ->
+        CryptoCoin.Transaction.add_transaction_output(
+          edit_trans,
+          key,
+          output
+        )
+      end)
+    end)
   end
 
   def handle_cast({:get_balance, caller}, state) do
@@ -104,7 +159,7 @@ defmodule CryptoCoin.Wallet do
       if CryptoCoin.TransactionUnit.get_amount(last_element) == amount do
         [last_element]
 
-        # else, iterate over list by accumulating transaction values 
+        # else, iterate over list by accumulating transaction values
       else
         {utx_list, total} =
           Enum.flat_map_reduce(valid_utxos, 0, fn x, acc ->
@@ -126,7 +181,7 @@ defmodule CryptoCoin.Wallet do
           end
 
           # else condition will only be executed when total == amount
-          # total > amount should never be encountered 
+          # total > amount should never be encountered
         else
           utx_list
         end

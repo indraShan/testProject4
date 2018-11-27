@@ -22,8 +22,8 @@ defmodule CryptoCoin.Transaction do
     output_data = CryptoCoin.Utils.encode(transaction) <> Integer.to_string(length(outputs))
     output_id = CryptoCoin.Utils.hash(output_data)
     output = CryptoCoin.TransactionUnit.create(key, amount, output_id)
-    outputs = outputs ++ [output]
-    add_outputs(transaction, outputs)
+    outputs = [output] ++ outputs
+    transaction |> Map.put("outputs", outputs)
   end
 
   def get_inputs(transaction) do
