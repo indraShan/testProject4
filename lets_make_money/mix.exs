@@ -15,7 +15,8 @@ defmodule Starter.MixProject do
   def application do
     [
       applications: [:rsa_ex],
-      extra_applications: [:logger]
+      extra_applications: [:logger],
+      mod: {Starter, []}
     ]
   end
 

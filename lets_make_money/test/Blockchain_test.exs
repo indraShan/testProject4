@@ -7,6 +7,13 @@ defmodule BlockchainTest do
     assert chain != nil
   end
 
+  test "verify is_older_than" do
+    chain1 = TestUtils.create_valid_blockchain()
+    chain2 = TestUtils.create_valid_blockchain()
+    assert CryptoCoin.Blockchain.is_older_than(chain1, chain2) == true
+    assert CryptoCoin.Blockchain.is_older_than(chain2, chain1) == false
+  end
+
   test "verify is_equal" do
     chain1 = TestUtils.create_valid_blockchain()
     chain2 = TestUtils.create_valid_blockchain()

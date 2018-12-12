@@ -12,7 +12,7 @@ defmodule MinerTest do
     transactions = [CryptoCoin.Transaction.create(inputs, outputs)]
 
     send(miner, {:mine, chain, transactions, 1})
-    assert_receive {:found_a_block, chain, _}, 300
+    assert_receive {:found_a_block, chain, _, _}, 300
   end
 
   test "mine genesis block" do

@@ -4,7 +4,7 @@ defmodule CryptoCoin.Transaction do
   end
 
   def create() do
-    %{"timestamp" => :os.system_time(:millisecond), "inputs" => [], "outputs" => []}
+    %{"timestamp" => NaiveDateTime.utc_now(), "inputs" => [], "outputs" => []}
   end
 
   def add_inputs(transaction, inputs) do
@@ -42,6 +42,7 @@ defmodule CryptoCoin.Transaction do
     end)
   end
 
+  # TODO: Assumes that the transaction is already unlocked
   def is_valid(transaction) do
     inputs = CryptoCoin.Transaction.get_inputs(transaction)
     outputs = CryptoCoin.Transaction.get_outputs(transaction)

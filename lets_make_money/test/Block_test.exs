@@ -25,6 +25,13 @@ defmodule BlockTest do
     assert CryptoCoin.Block.is_valid(block) == true
   end
 
+  test "verify is_older_than" do
+    block1 = TestUtils.create_valid_block()
+    block2 = TestUtils.create_valid_block2()
+    assert CryptoCoin.Block.is_older_than(block1, block2) == true
+    assert CryptoCoin.Block.is_older_than(block2, block1) == false
+  end
+
   test "verify is_equal" do
     block1 = TestUtils.create_valid_block()
     block2 = TestUtils.create_valid_block()

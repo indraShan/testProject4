@@ -12,6 +12,15 @@ defmodule CryptoCoin.Blockchain do
     Map.put(chain, size + 1, block)
   end
 
+  # Returns true if the 'chain' is older than 'other_chain'
+  # For now we check only the timestamp of last blocks of the two chains
+  # to check which one was mined before.
+  def is_older_than(chain, other_chain) do
+    last_block = get_last_block(chain)
+    other_last_block = get_last_block(other_chain)
+    CryptoCoin.Block.is_older_than(last_block, other_last_block)
+  end
+
   def chain_length(chain) do
     if chain == nil do
       0
@@ -74,14 +83,19 @@ defmodule CryptoCoin.Blockchain do
 
   # Collects all trasactions from the block chain
   # Returns a list.
+  # Transactions are sorted: oldest transaction first.
   def get_trasactions(chain) do
-    keys = Map.keys(chain)
+    if chain_length(chain) == 0 do
+      []
+    else
+      keys = Enum.sort(Map.keys(chain))
 
-    Enum.reduce(keys, [], fn key, acc ->
-      block = chain |> Map.get(key)
-      trasactions = block |> CryptoCoin.Block.get_trasactions()
-      trasactions ++ acc
-    end)
+      Enum.reduce(keys, [], fn key, acc ->
+        block = chain |> Map.get(key)
+        trasactions = block |> CryptoCoin.Block.get_trasactions()
+        trasactions ++ acc
+      end)
+    end
   end
 
   def is_valid(chain) do

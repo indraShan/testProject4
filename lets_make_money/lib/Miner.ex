@@ -8,7 +8,7 @@ defmodule CryptoCoin.Miner do
     receive do
       {:mine, blockchain, transactions, diff} ->
         block = mine(blockchain, transactions, diff, caller)
-        send(caller, {:found_a_block, blockchain, block})
+        send(caller, {:found_a_block, blockchain, block, transactions})
         wait(caller)
     end
   end

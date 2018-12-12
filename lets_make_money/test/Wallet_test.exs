@@ -4,19 +4,24 @@ defmodule WalletTest do
   setup %{} do
     chain = TestUtils.create_valid_blockchain2()
     {:ok, wallet} = CryptoCoin.Wallet.create("key1", "key1")
-    CryptoCoin.Wallet.handle_blockchain_broadcast(wallet, chain)
+    CryptoCoin.Wallet.handle_blockchain_broadcast(wallet, chain, self())
 
     {:ok, wallet2} = CryptoCoin.Wallet.create("key2", "key2")
-    CryptoCoin.Wallet.handle_blockchain_broadcast(wallet2, chain)
+    CryptoCoin.Wallet.handle_blockchain_broadcast(wallet2, chain, self())
 
     {:ok, wallet3} = CryptoCoin.Wallet.create("key3", "key3")
-    CryptoCoin.Wallet.handle_blockchain_broadcast(wallet3, chain)
+    CryptoCoin.Wallet.handle_blockchain_broadcast(wallet3, chain, self())
 
     {:ok, wallet4} = CryptoCoin.Wallet.create("key3", "key3")
-    CryptoCoin.Wallet.handle_blockchain_broadcast(wallet4, TestUtils.create_empty_blockchain())
+
+    CryptoCoin.Wallet.handle_blockchain_broadcast(
+      wallet4,
+      TestUtils.create_empty_blockchain(),
+      self()
+    )
 
     {:ok, wallet5} = CryptoCoin.Wallet.create("key3", "key3")
-    CryptoCoin.Wallet.handle_blockchain_broadcast(wallet4, nil)
+    CryptoCoin.Wallet.handle_blockchain_broadcast(wallet4, nil, self())
 
     {:ok, wallet1: wallet, wallet2: wallet2, wallet3: wallet3, wallet4: wallet4, wallet5: wallet5}
   end

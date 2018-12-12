@@ -19,13 +19,20 @@ defmodule CryptoCoin.Block do
       "hash" => hash,
       "prev_hash" => prev_hash,
       "nonce" => nonce,
-      "trasanctions" => trasanctions
+      "trasanctions" => trasanctions,
+      "timestamp" => NaiveDateTime.utc_now()
     }
   end
 
   def is_equal(block1, block2) do
     # For now just check if hashes match
     get_hash(block1) == get_hash(block2)
+  end
+
+  # Returns true if the 'block' is older than 'other_block'
+  # i.e. timestamp of block is lesser than other_block
+  def is_older_than(block, other_block) do
+    block |> Map.get("timestamp") < other_block |> Map.get("timestamp")
   end
 
   def get_hash(block) do

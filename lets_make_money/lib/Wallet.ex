@@ -13,19 +13,27 @@ defmodule CryptoCoin.Wallet do
       private_key: opts[:private_key],
       block_chain: nil,
       unspent_transactions: [],
-      full_node: nil
+      full_node: nil,
+      state_change_listener: nil,
+      # List of tuples {receiver_key, amount}
+      pending_transactions: [],
+      in_flight_transaction: nil
     }
 
     {:ok, state}
   end
 
   # Only to make testing easier.
-  def handle_blockchain_broadcast(pid, chain) do
-    send(pid, {:handle_blockchain_broadcast, chain})
+  def handle_blockchain_broadcast(pid, chain, caller) do
+    send(pid, {:handle_blockchain_broadcast, chain, caller})
   end
 
   def connected_with_full_node(pid, node) do
     GenServer.cast(pid, {:connected_with_full_node, node})
+  end
+
+  def set_state_change_listener(pid, listener) do
+    GenServer.cast(pid, {:set_state_change_listener, listener})
   end
 
   def get_balance(pid, caller) do
@@ -37,7 +45,7 @@ defmodule CryptoCoin.Wallet do
     GenServer.cast(pid, {:send_money, receiver_key, amount})
   end
 
-  def handle_info({:handle_blockchain_broadcast, chain}, state) do
+  def handle_info({:handle_blockchain_broadcast, chain, _}, state) do
     # For now go through the entire blockchain.
     # May be there is a better way.
     state = state |> Map.put(:block_chain, chain)
@@ -45,29 +53,84 @@ defmodule CryptoCoin.Wallet do
     unspent_transactions = unspent_transactions(state.public_key, state.private_key, chain)
     state = state |> Map.put(:unspent_transactions, unspent_transactions)
 
+    # Set in-flight transaction to nil as we just proccesed it.
+    state = state |> Map.put(:in_flight_transaction, nil)
+
+    # Wallets balance might have changed.
+    # Send a state change notification to whoever is intested.
+    notify_state_change(state, state.state_change_listener)
+
+    # If we have pending transactions, lets send one of them now.
+    pending_transactions =
+      if state.pending_transactions |> length > 0 do
+        {{receiver_key, amount}, pending_transactions} =
+          state.pending_transactions |> List.pop_at(0)
+
+        CryptoCoin.Wallet.send_money(self(), receiver_key, amount)
+        pending_transactions
+      else
+        []
+      end
+
+    state = state |> Map.put(:pending_transactions, pending_transactions)
+
     {:noreply, state}
   end
 
   def handle_cast({:connected_with_full_node, node}, state) do
     # Ask the node to send callbacks.
     # IO.puts("connecting with full node")
-    CryptoCoin.FullNode.add_peer(node, self())
+    CryptoCoin.FullNode.add_wallet(node, self())
     {:noreply, state |> Map.put(:full_node, node)}
   end
 
-  def handle_cast({:send_money, receiver_key, amount}, state) do
-    available_inputs = send_money_validate(amount, state.unspent_transactions)
-    # TODO: invalid input
-    if length(available_inputs) != 0 do
-      outputs_map = generate_outputs(state.public_key, receiver_key, available_inputs, amount)
+  def handle_cast({:set_state_change_listener, listener}, state) do
+    notify_state_change(state, listener)
+    {:noreply, state |> Map.put(:state_change_listener, listener)}
+  end
 
-      # outputs =
-      # (outputs_map |> Map.get(state.public_key)) ++ (outputs_map |> Map.get(receiver_key))
-      transaction = create_transaction(available_inputs, outputs_map)
-      send_transaction(transaction, state)
+  defp notify_state_change(state, listener) do
+    if listener != nil do
+      send(
+        listener,
+        {:wallet_state_change, self(), state.public_key, state.block_chain,
+         availableBalance(state.unspent_transactions)}
+      )
     end
+  end
 
+  def handle_info({:confirm_trasaction, _transaction}, state) do
     {:noreply, state}
+  end
+
+  def handle_cast({:send_money, receiver_key, amount}, state) do
+    updated_state =
+      if state.in_flight_transaction == nil do
+        available_inputs = send_money_validate(amount, state.unspent_transactions)
+        # TODO: invalid input
+        if length(available_inputs) != 0 do
+          outputs_map = generate_outputs(state.public_key, receiver_key, available_inputs, amount)
+
+          # outputs =
+          # (outputs_map |> Map.get(state.public_key)) ++ (outputs_map |> Map.get(receiver_key))
+          transaction = create_transaction(available_inputs, outputs_map)
+
+          send_transaction(transaction, state)
+
+          state |> Map.put(:in_flight_transaction, transaction)
+        else
+          state
+        end
+      else
+        # We have an existing in flight transaction.
+        # Just add the new transactions to pending list, they would be processed
+        # when the current transaction is confimed.
+        pending_transactions = state.pending_transactions
+        pending_transactions = [{receiver_key, amount}] ++ pending_transactions
+        state |> Map.put(:pending_transactions, pending_transactions)
+      end
+
+    {:noreply, updated_state}
   end
 
   defp send_transaction(transaction, state) do
