@@ -20,11 +20,34 @@ defmodule CryptoCoin.Simulator do
     GenServer.cast(pid, {:get_simulator_stats})
   end
 
+  def set_state_change_listener(pid, listener) do
+    GenServer.cast(pid, {:set_state_change_listener, listener})
+  end
+
+  def handle_cast({:set_state_change_listener, listener}, state) do
+    {:noreply, state |> Map.put(:state_change_listener, listener)}
+  end
+
   def handle_cast({:get_simulator_stats}, state) do
+    notify_state_change_listener(state)
     {:noreply, state}
   end
 
-  def init(opts) do
+  defp notify_state_change_listener(state) do
+    if state.state_change_listener != nil do
+      # chain length, number of nodes, number of wallets,
+      # public to amount map, chain length to time to generate nounce map,
+      # block chain length to nounce value map
+      send(
+        state.state_change_listener,
+        {:network_state, state.chain_length, state.nodes |> length, state.wallets |> length,
+         state.wallets_amount_map, state.block_chain_length_time_map,
+         state.block_chain_length_nounce_value_map}
+      )
+    end
+  end
+
+  def init(_opts) do
     state = %{
       nodes: [],
       wallets: [],
@@ -34,7 +57,9 @@ defmodule CryptoCoin.Simulator do
       number_of_transactions: 0,
       positive_balance_accounts: %{},
       block_chain_length_time_map: %{},
-      block_chain_length_nounce_value_map: %{}
+      block_chain_length_nounce_value_map: %{},
+      chain_length: 0,
+      state_change_listener: nil
     }
 
     send(self(), {:create_network})
@@ -179,6 +204,8 @@ defmodule CryptoCoin.Simulator do
           updated_state
           |> Map.put(:block_chain_length_nounce_value_map, block_chain_length_nounce_value_map)
 
+        updated_state = updated_state |> Map.put(:chain_length, chain_length)
+
         if transaction_count == 0 do
           # Mine genesis block
           CryptoCoin.FullNode.mine_genesis(updated_state.genesis_node, @genesis_reward)
@@ -187,7 +214,8 @@ defmodule CryptoCoin.Simulator do
           if chain_length > @max_number_of_transactions do
             # We are done. Notify caller.
             IO.puts("Done")
-            IO.inspect(updated_state.block_chain_length_time_map)
+            # IO.inspect(updated_state.block_chain_length_time_map)
+            notify_state_change_listener(updated_state)
             updated_state
           else
             # From the positive balance accounts, choose a any count
@@ -257,27 +285,27 @@ defmodule CryptoCoin.Simulator do
     CryptoCoin.Wallet.send_money(sender, receiver_key, amount)
   end
 
-  defp wallet_to_transact(state) do
-    wallets_public_keys = state |> Map.get(:wallets_public_keys)
-
-    if length(wallets_public_keys) > 1 do
-      sender_index = Enum.random(0..(length(wallets_public_keys) - 1))
-      sender_key = wallets_public_keys |> Enum.at(sender_index)
-      {sender_wallet, _, sender_balance} = state.wallets_amount_map |> Map.get(sender_key)
-
-      reeiver_index = Enum.random(0..(length(wallets_public_keys) - 1))
-      receiver_key = wallets_public_keys |> Enum.at(reeiver_index)
-      {_, receiver_key, _} = state.wallets_amount_map |> Map.get(receiver_key)
-
-      if sender_balance <= 0 || sender_key == receiver_key do
-        {nil, nil, 0}
-      else
-        {sender_wallet, receiver_key, sender_balance * 0.5}
-      end
-    else
-      {nil, nil, 0}
-    end
-  end
+  # defp wallet_to_transact(state) do
+  #   wallets_public_keys = state |> Map.get(:wallets_public_keys)
+  #
+  #   if length(wallets_public_keys) > 1 do
+  #     sender_index = Enum.random(0..(length(wallets_public_keys) - 1))
+  #     sender_key = wallets_public_keys |> Enum.at(sender_index)
+  #     {sender_wallet, _, sender_balance} = state.wallets_amount_map |> Map.get(sender_key)
+  #
+  #     reeiver_index = Enum.random(0..(length(wallets_public_keys) - 1))
+  #     receiver_key = wallets_public_keys |> Enum.at(reeiver_index)
+  #     {_, receiver_key, _} = state.wallets_amount_map |> Map.get(receiver_key)
+  #
+  #     if sender_balance <= 0 || sender_key == receiver_key do
+  #       {nil, nil, 0}
+  #     else
+  #       {sender_wallet, receiver_key, sender_balance * 0.5}
+  #     end
+  #   else
+  #     {nil, nil, 0}
+  #   end
+  # end
 
   def handle_info({:create_network}, state) do
     # Create nodes along with their wallets.
