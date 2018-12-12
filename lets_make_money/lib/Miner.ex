@@ -7,8 +7,15 @@ defmodule CryptoCoin.Miner do
   defp wait(caller) do
     receive do
       {:mine, blockchain, transactions, diff} ->
-        block = mine(blockchain, transactions, diff, caller)
-        send(caller, {:found_a_block, blockchain, block, transactions})
+        start_time = :os.system_time(:millisecond)
+        {block, nounce} = mine(blockchain, transactions, diff, caller)
+        end_time = :os.system_time(:millisecond)
+
+        send(
+          caller,
+          {:found_a_block, blockchain, block, transactions, end_time - start_time, nounce}
+        )
+
         wait(caller)
     end
   end
@@ -40,7 +47,7 @@ defmodule CryptoCoin.Miner do
         caller
       )
 
-    CryptoCoin.Block.create(hash, last_block, found_nonce, transactions, diff)
+    {CryptoCoin.Block.create(hash, last_block, found_nonce, transactions, diff), found_nonce}
   end
 
   defp mine(prev_hash, transactions, diff, nonce, caller) do

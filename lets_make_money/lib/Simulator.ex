@@ -32,7 +32,9 @@ defmodule CryptoCoin.Simulator do
       wallets_amount_map: %{},
       wallets_public_keys: [],
       number_of_transactions: 0,
-      positive_balance_accounts: %{}
+      positive_balance_accounts: %{},
+      block_chain_length_time_map: %{},
+      block_chain_length_nounce_value_map: %{}
     }
 
     send(self(), {:create_network})
@@ -111,7 +113,7 @@ defmodule CryptoCoin.Simulator do
     end
   end
 
-  def handle_info({:wallet_state_change, wallet, public_key, chain, balance}, state) do
+  def handle_info({:wallet_state_change, wallet, public_key, chain, balance, time, nounce}, state) do
     wallets_amount_map = state.wallets_amount_map
     # Update balance
     wallets_amount_map = wallets_amount_map |> Map.put(public_key, {wallet, public_key, balance})
@@ -124,7 +126,9 @@ defmodule CryptoCoin.Simulator do
     updated_state =
       if balance > 0 and
            updated_state.positive_balance_accounts |> Map.has_key?(public_key) == false do
-        positive_balance_accounts = updated_state.positive_balance_accounts |> Map.put(public_key, wallet)
+        positive_balance_accounts =
+          updated_state.positive_balance_accounts |> Map.put(public_key, wallet)
+
         updated_state |> Map.put(:positive_balance_accounts, positive_balance_accounts)
       else
         updated_state
@@ -133,7 +137,9 @@ defmodule CryptoCoin.Simulator do
     updated_state =
       if balance <= 0 and
            updated_state.positive_balance_accounts |> Map.has_key?(public_key) == true do
-        positive_balance_accounts = updated_state.positive_balance_accounts |> Map.delete(public_key)
+        positive_balance_accounts =
+          updated_state.positive_balance_accounts |> Map.delete(public_key)
+
         updated_state |> Map.put(:positive_balance_accounts, positive_balance_accounts)
       else
         updated_state
@@ -159,7 +165,19 @@ defmodule CryptoCoin.Simulator do
         transaction_count = updated_state.number_of_transactions
         # IO.puts("transaction_count = " <> Integer.to_string(transaction_count))
         chain_length = CryptoCoin.Blockchain.chain_length(chain)
-        IO.puts("chain_length = " <> Integer.to_string(chain_length))
+
+        block_chain_length_time_map =
+          updated_state.block_chain_length_time_map |> Map.put(chain_length, time)
+
+        updated_state =
+          updated_state |> Map.put(:block_chain_length_time_map, block_chain_length_time_map)
+
+        block_chain_length_nounce_value_map =
+          updated_state.block_chain_length_nounce_value_map |> Map.put(chain_length, nounce)
+
+        updated_state =
+          updated_state
+          |> Map.put(:block_chain_length_nounce_value_map, block_chain_length_nounce_value_map)
 
         if transaction_count == 0 do
           # Mine genesis block
@@ -169,7 +187,7 @@ defmodule CryptoCoin.Simulator do
           if chain_length > @max_number_of_transactions do
             # We are done. Notify caller.
             IO.puts("Done")
-            # IO.inspect(updated_state.wallets_amount_map)
+            IO.inspect(updated_state.block_chain_length_time_map)
             updated_state
           else
             # From the positive balance accounts, choose a any count
@@ -186,7 +204,8 @@ defmodule CryptoCoin.Simulator do
               {wallet1, public_key1, balance1} =
                 updated_state.wallets_amount_map |> Map.get(sender1_key)
 
-              {wallet2, public_key2, balance2} = updated_state.wallets_amount_map |> Map.get(sender2_key)
+              {wallet2, public_key2, balance2} =
+                updated_state.wallets_amount_map |> Map.get(sender2_key)
 
               total_send = balance1 * 0.5
               receiver_key = receiver_key_for_sender(public_key1, updated_state)

@@ -49,13 +49,15 @@ defmodule CryptoCoin.FullNode do
       trasaction_units_map: %{},
       topology: nil,
       number_of_transactions_confirmed: 0,
-      found_a_block_count: 0
+      found_a_block_count: 0,
+      time: 0,
+      nounce: 0
     }
 
     chain = opts[:chain]
 
     if CryptoCoin.Blockchain.chain_length(chain) != 0 do
-      send(self(), {:handle_blockchain_broadcast, chain, self()})
+      send(self(), {:handle_blockchain_broadcast, chain, self(), 0, 0})
     end
 
     {:ok, state}
@@ -80,7 +82,7 @@ defmodule CryptoCoin.FullNode do
     )
   end
 
-  def handle_info({:handle_blockchain_broadcast, chain, caller}, state) do
+  def handle_info({:handle_blockchain_broadcast, chain, caller, time, nounce}, state) do
     # Update if the new chain is longer and if its valid.
     new_size = CryptoCoin.Blockchain.chain_length(chain)
     old_size = CryptoCoin.Blockchain.chain_length(state.block_chain)
@@ -100,7 +102,7 @@ defmodule CryptoCoin.FullNode do
           update_transaction_units_map_for_transactions(transactions, state.trasaction_units_map)
 
         state = state |> Map.put(:trasaction_units_map, transaction_units_map)
-        notify_block_chain(chain, state)
+        notify_block_chain(chain, state, time, nounce)
 
         pending_transaction = state.pending_transaction
 
@@ -112,13 +114,16 @@ defmodule CryptoCoin.FullNode do
 
         # Update the blockchain.
         # IO.puts("block_chain update 2")
-        state |> Map.put(:block_chain, chain)
+        state = state |> Map.put(:block_chain, chain)
+
+        state = state |> Map.put(:time, time)
+        state |> Map.put(:nounce, nounce)
       else
         # For whatever reason this nodes chain has persisted.
         # If the two chains are not the same, ask the peer who sent
         # this broadcast, to update its chain.
         if CryptoCoin.Blockchain.is_equal(chain, state.block_chain) == false && caller != self() do
-          send(caller, {:handle_blockchain_broadcast, state.block_chain, self()})
+          send(caller, {:handle_blockchain_broadcast, state.block_chain, self(), time, nounce})
         end
 
         state
@@ -180,13 +185,13 @@ defmodule CryptoCoin.FullNode do
     {:noreply, updated_state}
   end
 
-  defp confirm_interrupted_transactions(state) do
-    transactions = state.processing_transactions |> Map.values()
-
-    Enum.each(transactions, fn transaction ->
-      CryptoCoin.FullNode.confirm_trasaction(self(), transaction)
-    end)
-  end
+  # defp confirm_interrupted_transactions(state) do
+  #   transactions = state.processing_transactions |> Map.values()
+  #
+  #   Enum.each(transactions, fn transaction ->
+  #     CryptoCoin.FullNode.confirm_trasaction(self(), transaction)
+  #   end)
+  # end
 
   defp update_transaction_units_map_for_transactions(transactions, transaction_units_map) do
     Enum.reduce(transactions, transaction_units_map, fn transaction, acc ->
@@ -250,7 +255,7 @@ defmodule CryptoCoin.FullNode do
   def handle_cast({:set_topology, topology}, state) do
     # Notify peers if we have a valid blockchain
     updated_state = state |> Map.put(:topology, topology)
-    notify_block_chain(state.block_chain, updated_state)
+    notify_block_chain(state.block_chain, updated_state, state.time, state.nounce)
     {:noreply, updated_state}
   end
 
@@ -293,7 +298,7 @@ defmodule CryptoCoin.FullNode do
 
   def handle_cast({:add_wallet, walletId}, state) do
     # Notify the new wallet of our blockchain
-    notify_block_chain_to_peers(state.block_chain, [walletId])
+    notify_block_chain_to_peers(state.block_chain, [walletId], state.time, state.nounce)
     wallets = state |> Map.get(:wallets)
     wallets = [walletId] ++ wallets
     # IO.puts("wallets count: " <> Integer.to_string(wallets |> length))
@@ -302,7 +307,7 @@ defmodule CryptoCoin.FullNode do
   end
 
   # Called when a miner finds a block matching the set diff level
-  def handle_info({:found_a_block, blockchain, block, transactions}, state) do
+  def handle_info({:found_a_block, blockchain, block, transactions, time, nounce}, state) do
     # IO.puts("Found a block")
     # Ignore the call if current block chain is not exactly
     # equal to the blockchain with miner. Could happen if the
@@ -338,9 +343,12 @@ defmodule CryptoCoin.FullNode do
         state = state |> Map.put(:pending_transaction, pending_transaction)
 
         # Notify other nodes and wallets that we found a new longer chain.
-        notify_block_chain(chain, state)
+        notify_block_chain(chain, state, time, nounce)
         # IO.puts("block_chain update 1")
-        state |> Map.put(:block_chain, chain)
+        state = state |> Map.put(:block_chain, chain)
+
+        state = state |> Map.put(:time, time)
+        state |> Map.put(:nounce, nounce)
       else
         IO.puts("Invalid block chaain")
         state
@@ -356,7 +364,7 @@ defmodule CryptoCoin.FullNode do
   end
 
   # Notify both wallets and peers from topology.
-  defp notify_block_chain(chain, state) do
+  defp notify_block_chain(chain, state, time, nouce) do
     wallets = state |> Map.get(:wallets)
     topology = state |> Map.get(:topology)
 
@@ -367,13 +375,13 @@ defmodule CryptoCoin.FullNode do
         []
       end
 
-    notify_block_chain_to_peers(chain, wallets ++ peers)
+    notify_block_chain_to_peers(chain, wallets ++ peers, time, nouce)
   end
 
-  defp notify_block_chain_to_peers(chain, peers) do
+  defp notify_block_chain_to_peers(chain, peers, time, nouce) do
     if CryptoCoin.Blockchain.chain_length(chain) != 0 do
       Enum.each(peers, fn pid ->
-        send(pid, {:handle_blockchain_broadcast, chain, self()})
+        send(pid, {:handle_blockchain_broadcast, chain, self(), time, nouce})
       end)
     else
     end

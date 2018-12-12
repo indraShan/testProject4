@@ -17,7 +17,9 @@ defmodule CryptoCoin.Wallet do
       state_change_listener: nil,
       # List of tuples {receiver_key, amount}
       pending_transactions: [],
-      in_flight_transaction: nil
+      in_flight_transaction: nil,
+      nounce: 0,
+      time: 0
     }
 
     {:ok, state}
@@ -25,7 +27,7 @@ defmodule CryptoCoin.Wallet do
 
   # Only to make testing easier.
   def handle_blockchain_broadcast(pid, chain, caller) do
-    send(pid, {:handle_blockchain_broadcast, chain, caller})
+    send(pid, {:handle_blockchain_broadcast, chain, caller, 0, 0})
   end
 
   def connected_with_full_node(pid, node) do
@@ -45,7 +47,7 @@ defmodule CryptoCoin.Wallet do
     GenServer.cast(pid, {:send_money, receiver_key, amount})
   end
 
-  def handle_info({:handle_blockchain_broadcast, chain, _}, state) do
+  def handle_info({:handle_blockchain_broadcast, chain, _, time, nounce}, state) do
     # For now go through the entire blockchain.
     # May be there is a better way.
     state = state |> Map.put(:block_chain, chain)
@@ -60,7 +62,7 @@ defmodule CryptoCoin.Wallet do
 
     # Wallets balance might have changed.
     # Send a state change notification to whoever is intested.
-    notify_state_change(state, state.state_change_listener)
+    notify_state_change(state, state.state_change_listener, time, nounce)
 
     # If we have pending transactions, lets send one of them now.
     pending_transactions =
@@ -78,6 +80,9 @@ defmodule CryptoCoin.Wallet do
 
     state = state |> Map.put(:pending_transactions, pending_transactions)
 
+    state = state |> Map.put(:time, time)
+    state = state |> Map.put(:nounce, nounce)
+
     {:noreply, state}
   end
 
@@ -89,16 +94,16 @@ defmodule CryptoCoin.Wallet do
   end
 
   def handle_cast({:set_state_change_listener, listener}, state) do
-    notify_state_change(state, listener)
+    notify_state_change(state, listener, state.time, state.nounce)
     {:noreply, state |> Map.put(:state_change_listener, listener)}
   end
 
-  defp notify_state_change(state, listener) do
+  defp notify_state_change(state, listener, time, nounce) do
     if listener != nil do
       send(
         listener,
         {:wallet_state_change, self(), state.public_key, state.block_chain,
-         availableBalance(state.unspent_transactions)}
+         availableBalance(state.unspent_transactions), time, nounce}
       )
     end
   end

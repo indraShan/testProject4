@@ -12,12 +12,12 @@ defmodule MinerTest do
     transactions = [CryptoCoin.Transaction.create(inputs, outputs)]
 
     send(miner, {:mine, chain, transactions, 1})
-    assert_receive {:found_a_block, chain, _, _}, 300
+    assert_receive {:found_a_block, chain, _, _, _, _}, 300
   end
 
   test "mine genesis block" do
     chain = TestUtils.create_empty_blockchain()
-    block = CryptoCoin.Miner.mine(chain, [], 1, self())
+    {block, _} = CryptoCoin.Miner.mine(chain, [], 1, self())
     hash = CryptoCoin.Block.get_hash(block)
     prefix = String.slice(hash, 0, 1)
     assert prefix == "0"
@@ -33,7 +33,7 @@ defmodule MinerTest do
     transactions = [CryptoCoin.Transaction.create(inputs, outputs)]
 
     chain = TestUtils.create_valid_blockchain2()
-    block = CryptoCoin.Miner.mine(chain, transactions, 2, self())
+    {block, _} = CryptoCoin.Miner.mine(chain, transactions, 2, self())
     hash = CryptoCoin.Block.get_hash(block)
     prefix = String.slice(hash, 0, 2)
     assert prefix == "00"
@@ -56,7 +56,7 @@ defmodule MinerTest do
     transactions = [CryptoCoin.Transaction.create(inputs, outputs)] ++ transactions
 
     chain = TestUtils.create_valid_blockchain2()
-    block = CryptoCoin.Miner.mine(chain, transactions, 3, self())
+    {block, _} = CryptoCoin.Miner.mine(chain, transactions, 3, self())
     hash = CryptoCoin.Block.get_hash(block)
     prefix = String.slice(hash, 0, 3)
     assert prefix == "000"
