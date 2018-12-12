@@ -49,6 +49,8 @@ defmodule CryptoCoin.Wallet do
     # For now go through the entire blockchain.
     # May be there is a better way.
     state = state |> Map.put(:block_chain, chain)
+    # IO.puts("Chain length")
+    # IO.puts(CryptoCoin.Blockchain.chain_length(chain))
 
     unspent_transactions = unspent_transactions(state.public_key, state.private_key, chain)
     state = state |> Map.put(:unspent_transactions, unspent_transactions)
@@ -66,9 +68,11 @@ defmodule CryptoCoin.Wallet do
         {{receiver_key, amount}, pending_transactions} =
           state.pending_transactions |> List.pop_at(0)
 
+        # IO.puts("Processing pending transactions")
         CryptoCoin.Wallet.send_money(self(), receiver_key, amount)
         pending_transactions
       else
+        # IO.puts("No pending transactions")
         []
       end
 
@@ -119,6 +123,7 @@ defmodule CryptoCoin.Wallet do
 
           state |> Map.put(:in_flight_transaction, transaction)
         else
+          # IO.puts("Cant sent money")
           state
         end
       else
@@ -136,6 +141,8 @@ defmodule CryptoCoin.Wallet do
   defp send_transaction(transaction, state) do
     if state.full_node != nil && CryptoCoin.Transaction.is_valid(transaction) == true do
       CryptoCoin.FullNode.confirm_trasaction(state.full_node, transaction)
+    else
+      IO.puts("transaction cant be sent")
     end
   end
 

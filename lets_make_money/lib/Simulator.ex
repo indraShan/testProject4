@@ -1,11 +1,11 @@
 defmodule CryptoCoin.Simulator do
   use GenServer
-  @mining_reward 10
+  @mining_reward 20
   @genesis_reward 500
-  @diff_level 3
-  @number_of_nodes 3
-  @number_of_wallets 3
-  @max_number_of_transactions 5
+  @diff_level 1
+  @number_of_nodes 100
+  @number_of_wallets 60
+  @max_number_of_transactions 100
   @transaction_wait_interval 1
 
   def start_link(_opts) do
@@ -25,22 +25,14 @@ defmodule CryptoCoin.Simulator do
   end
 
   def init(opts) do
-    # {:ok, {priv, pub}} = RsaEx.generate_keypair()
-    # # First node
-    # first_node = create_node(pub, priv, @mining_reward, @diff_level)
-    # # Mine genesis block
-    # CryptoCoin.FullNode.mine_genesis(first_node)
-    # # Create wallet for this miner
-    # {:ok, first_wallet} = CryptoCoin.Wallet.create(pub, priv)
-    # CryptoCoin.Wallet.connected_with_full_node(first_wallet, first_node)
-
     state = %{
       nodes: [],
       wallets: [],
       # wallet_public_key -> {walletid, pub_key, amount}
       wallets_amount_map: %{},
       wallets_public_keys: [],
-      number_of_transactions: 0
+      number_of_transactions: 0,
+      positive_balance_accounts: %{}
     }
 
     send(self(), {:create_network})
@@ -71,7 +63,7 @@ defmodule CryptoCoin.Simulator do
         "priv_key" <> Integer.to_string(index) <> NaiveDateTime.to_string(NaiveDateTime.utc_now())
 
       public_key = CryptoCoin.Utils.hash(pub_data)
-      _private_key = CryptoCoin.Utils.hash(private_data)
+      private_key = CryptoCoin.Utils.hash(private_data)
 
       node =
         create_node(
@@ -103,9 +95,8 @@ defmodule CryptoCoin.Simulator do
           "priv_key" <>
             Integer.to_string(index) <> NaiveDateTime.to_string(NaiveDateTime.utc_now())
 
-        # {:ok, {priv, pub}} = RsaEx.generate_keypair()
         public_key = CryptoCoin.Utils.hash(pub_data)
-        _private_key = CryptoCoin.Utils.hash(private_data)
+        private_key = CryptoCoin.Utils.hash(private_data)
 
         {:ok, wallet} =
           CryptoCoin.Wallet.create(
@@ -120,7 +111,7 @@ defmodule CryptoCoin.Simulator do
     end
   end
 
-  def handle_info({:wallet_state_change, wallet, public_key, _chain, balance}, state) do
+  def handle_info({:wallet_state_change, wallet, public_key, chain, balance}, state) do
     wallets_amount_map = state.wallets_amount_map
     # Update balance
     wallets_amount_map = wallets_amount_map |> Map.put(public_key, {wallet, public_key, balance})
@@ -129,6 +120,24 @@ defmodule CryptoCoin.Simulator do
     # IO.inspect(updated_state |> Map.get(:genesis_wallet))
     wallets_public_keys = updated_state |> Map.get(:wallets_public_keys)
     all_keys = Map.keys(wallets_amount_map)
+
+    updated_state =
+      if balance > 0 and
+           updated_state.positive_balance_accounts |> Map.has_key?(public_key) == false do
+        positive_balance_accounts = updated_state.positive_balance_accounts |> Map.put(public_key, wallet)
+        updated_state |> Map.put(:positive_balance_accounts, positive_balance_accounts)
+      else
+        updated_state
+      end
+
+    updated_state =
+      if balance <= 0 and
+           updated_state.positive_balance_accounts |> Map.has_key?(public_key) == true do
+        positive_balance_accounts = updated_state.positive_balance_accounts |> Map.delete(public_key)
+        updated_state |> Map.put(:positive_balance_accounts, positive_balance_accounts)
+      else
+        updated_state
+      end
 
     # Update the wallets_public keys to reflect all known wallets.
     updated_state =
@@ -148,48 +157,84 @@ defmodule CryptoCoin.Simulator do
     updated_state =
       if recorded_keys_count == length(all_keys) do
         transaction_count = updated_state.number_of_transactions
-        # IO.puts(transaction_count)
+        # IO.puts("transaction_count = " <> Integer.to_string(transaction_count))
+        chain_length = CryptoCoin.Blockchain.chain_length(chain)
+        IO.puts("chain_length = " <> Integer.to_string(chain_length))
 
         if transaction_count == 0 do
           # Mine genesis block
-          # IO.puts("Mining genesis")
           CryptoCoin.FullNode.mine_genesis(updated_state.genesis_node, @genesis_reward)
           updated_state |> Map.put(:number_of_transactions, 1)
         else
-          if transaction_count >= @max_number_of_transactions do
+          if chain_length > @max_number_of_transactions do
+            # We are done. Notify caller.
+            IO.puts("Done")
+            # IO.inspect(updated_state.wallets_amount_map)
             updated_state
           else
-            # Schedule next step of transactions.
-            genesis_wallet = updated_state.genesis_wallet
+            # From the positive balance accounts, choose a any count
+            # Choose a random receiver.
+            if updated_state.positive_balance_accounts |> Map.keys() |> length > 0 do
+              # Get a random receiver other than the sender.
+              all_positive_accounts = updated_state.positive_balance_accounts |> Map.keys()
+              index1 = Enum.random(0..(length(all_positive_accounts) - 1))
+              index2 = Enum.random(0..(length(all_positive_accounts) - 1))
 
-            if genesis_wallet == wallet do
-              # IO.puts("Next transaction")
-              # 4 transactions.
-              half = balance * 0.5
-              first = half * 0.25
-              second = half * 0.25
-              third = half * 0.25
-              fourth = half * 0.25
-              transact(genesis_wallet, updated_state.receiver_key, first)
-              transact(genesis_wallet, updated_state.receiver_key, second)
-              transact(genesis_wallet, updated_state.receiver_key, third)
-              transact(genesis_wallet, updated_state.receiver_key, fourth)
-              updated_state |> Map.put(:number_of_transactions, transaction_count + 1)
+              sender1_key = all_positive_accounts |> Enum.at(index1)
+              sender2_key = all_positive_accounts |> Enum.at(index2)
+
+              {wallet1, public_key1, balance1} =
+                updated_state.wallets_amount_map |> Map.get(sender1_key)
+
+              {wallet2, public_key2, balance2} = updated_state.wallets_amount_map |> Map.get(sender2_key)
+
+              total_send = balance1 * 0.5
+              receiver_key = receiver_key_for_sender(public_key1, updated_state)
+              transact(wallet1, receiver_key, total_send * 0.5)
+              receiver_key = receiver_key_for_sender(public_key1, updated_state)
+              transact(wallet1, receiver_key, total_send * 0.5)
+
+              total_send = balance2 * 0.5
+              receiver_key = receiver_key_for_sender(public_key2, updated_state)
+              transact(wallet2, receiver_key, total_send * 0.5)
+              receiver_key = receiver_key_for_sender(public_key2, updated_state)
+              transact(wallet2, receiver_key, total_send * 0.5)
+
+              # Increase transaction_count by one
+              updated_state |> Map.put(:number_of_transactions, transaction_count + 6)
             else
+              # No changes to the state.
               updated_state
             end
           end
         end
       else
+        # We are still building the keys.
         updated_state
       end
 
     {:noreply, updated_state}
   end
 
+  defp receiver_key_for_sender(sender_key, state) do
+    keys = state |> Map.get(:wallets_public_keys)
+    index = Enum.random(0..(length(keys) - 1))
+    receiver_key = keys |> Enum.at(index)
+
+    if receiver_key == sender_key do
+      receiver_key_for_sender(sender_key, state)
+    else
+      receiver_key
+    end
+  end
+
+  def handle_info({:make_a_transaction, sender, receiver_key, amount}, state) do
+    CryptoCoin.Wallet.send_money(sender, receiver_key, amount)
+    {:noreply, state}
+  end
+
   defp transact(sender, receiver_key, amount) do
-    # IO.puts("sending")
-    # IO.puts(amount)
+    # Process.send_after(self(), {:make_a_transaction, sender, receiver_key, amount}, 100)
     CryptoCoin.Wallet.send_money(sender, receiver_key, amount)
   end
 
@@ -215,30 +260,6 @@ defmodule CryptoCoin.Simulator do
     end
   end
 
-  def handle_info({:make_a_transaction}, state) do
-    transaction_count = state.number_of_transactions
-    # IO.puts(transaction_count)
-
-    updated_state =
-      if transaction_count < @max_number_of_transactions do
-        {sender, receiver_key, amount} = wallet_to_transact(state)
-        # If we can't find a wallet to do a transaction, schedule again.
-        if sender != nil do
-          transact(sender, receiver_key, amount)
-          schedule_transaction(@transaction_wait_interval)
-          state |> Map.put(:number_of_transactions, transaction_count + 1)
-        else
-          schedule_transaction(0)
-          state
-        end
-      else
-        # We do not schedule a transaction as we have reached the count.
-        state
-      end
-
-    {:noreply, updated_state}
-  end
-
   def handle_info({:create_network}, state) do
     # Create nodes along with their wallets.
     updated_state = create_full_nodes(state)
@@ -248,24 +269,6 @@ defmodule CryptoCoin.Simulator do
     wallets = create_wallets()
     nodes = updated_state |> Map.get(:nodes)
     nodes_count = nodes |> length
-
-    pub_data =
-      "public_key" <> Integer.to_string(56) <> NaiveDateTime.to_string(NaiveDateTime.utc_now())
-
-    private_data =
-      "priv_key" <> Integer.to_string(56) <> NaiveDateTime.to_string(NaiveDateTime.utc_now())
-
-    # {:ok, {priv, pub}} = RsaEx.generate_keypair()
-    public_key = CryptoCoin.Utils.hash(pub_data)
-    _private_key = CryptoCoin.Utils.hash(private_data)
-
-    {:ok, fake_wallet} =
-      CryptoCoin.Wallet.create(
-        public_key,
-        public_key
-      )
-
-    wallets = [fake_wallet] ++ wallets
 
     Enum.each(wallets, fn wallet ->
       index = Enum.random(0..(nodes_count - 1))
@@ -291,23 +294,17 @@ defmodule CryptoCoin.Simulator do
       CryptoCoin.Wallet.set_state_change_listener(wallet, self())
     end)
 
-    # IO.puts(updated_state |> Map.get(:wallets) |> length)
-    # IO.puts(updated_state |> Map.get(:nodes) |> length)
-
     # Choose a node to mine genesis block
     updated_state = updated_state |> Map.put(:genesis_node, nodes |> Enum.at(0))
 
-    updated_state = updated_state |> Map.put(:genesis_wallet, wallets |> Enum.at(0))
-    updated_state = updated_state |> Map.put(:receiver_key, public_key)
+    # IO.puts(updated_state |> Map.get(:nodes) |> length)
+    # updated_state = updated_state |> Map.put(:genesis_wallet, wallets |> Enum.at(0))
+    # updated_state = updated_state |> Map.put(:receiver_key, public_key)
 
     {:noreply, updated_state}
   end
 
   def handle_info(:timeout, state) do
     {:stop, :normal, state}
-  end
-
-  defp schedule_transaction(delay) do
-    Process.send_after(self(), {:make_a_transaction}, delay)
   end
 end

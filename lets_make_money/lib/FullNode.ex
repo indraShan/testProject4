@@ -44,11 +44,12 @@ defmodule CryptoCoin.FullNode do
       mining_reward: opts[:mining_reward],
       diffLevel: opts[:diff],
       wallets: [],
-      # transaction_hash -> transaction_object
-      processing_transactions: %{},
+      pending_transaction: [],
       # id -> {bool, amount}. true means the unit is spent already
       trasaction_units_map: %{},
-      topology: nil
+      topology: nil,
+      number_of_transactions_confirmed: 0,
+      found_a_block_count: 0
     }
 
     chain = opts[:chain]
@@ -100,10 +101,17 @@ defmodule CryptoCoin.FullNode do
 
         state = state |> Map.put(:trasaction_units_map, transaction_units_map)
         notify_block_chain(chain, state)
-        # Mining might have been interrupted because of arrival of this blockchain.
-        # In that case try to confirm pending transactions once again.
-        confirm_interrupted_transactions(state)
+
+        pending_transaction = state.pending_transaction
+
+        if pending_transaction |> length > 0 do
+          # Mining was interupted. Schedule transction confirmation again for
+          # for the olderst transaction
+          mine_transaction(self())
+        end
+
         # Update the blockchain.
+        # IO.puts("block_chain update 2")
         state |> Map.put(:block_chain, chain)
       else
         # For whatever reason this nodes chain has persisted.
@@ -116,6 +124,59 @@ defmodule CryptoCoin.FullNode do
         state
       end
 
+    {:noreply, updated_state}
+  end
+
+  defp mine_transaction(pid) do
+    GenServer.cast(pid, {:mine_transaction})
+  end
+
+  def handle_cast({:mine_transaction}, state) do
+    # Get the oldest transaction and start mining if its valid.
+    # If invalid, remove it from list and call self again.
+    # If the transaction is not valid, don't mine for it.
+    transaction = state.pending_transaction |> Enum.at(0)
+
+    updated_state =
+      if CryptoCoin.Transaction.is_valid(transaction) == true and
+           transaction_does_not_spend_unknown_unit(transaction, state) == true and
+           transaction_does_not_double_spend(transaction, state) == true do
+        mining_transaction = mining_reward_transaction(state, state.mining_reward)
+
+        send(
+          state.miner,
+          {:mine, state.block_chain, [transaction, mining_transaction], state.diffLevel}
+        )
+
+        # Ask other nodes to confirm the transaction too.
+        notify_transaction(transaction, state)
+
+        # record this transaction as 'processing'
+        # transaction_hash = CryptoCoin.Utils.hash(CryptoCoin.Utils.encode(transaction))
+
+        # processing_transactions =
+        # state.processing_transactions |> Map.put(transaction_hash, transaction)
+
+        # state = state |> Map.put(:processing_transactions, processing_transactions)
+        state
+        |> Map.put(:number_of_transactions_confirmed, state.number_of_transactions_confirmed + 1)
+      else
+        # IO.puts("Invalid transaction")
+        # If the transaction is invalid, it should be removed from
+        # processing_transactions if present
+        # transaction_hash = CryptoCoin.Utils.hash(CryptoCoin.Utils.encode(transaction))
+        # processing_transactions = state.processing_transactions |> Map.delete(transaction_hash)
+        # state |> Map.put(:processing_transactions, processing_transactions)
+        {_, pending_transaction} = state.pending_transaction |> List.pop_at(0)
+
+        if pending_transaction |> length > 0 do
+          mine_transaction(self())
+        end
+
+        state |> Map.put(:pending_transaction, pending_transaction)
+      end
+
+    # IO.puts("number_of_transactions_confirmed = " <> Integer.to_string(updated_state.number_of_transactions_confirmed))
     {:noreply, updated_state}
   end
 
@@ -193,35 +254,17 @@ defmodule CryptoCoin.FullNode do
     {:noreply, updated_state}
   end
 
+  # If we do not have pending_transaction, start mining immidiately
+  # Othetwise just add this transaction to pending_transaction list.
   def handle_info({:confirm_trasaction, transaction}, state) do
-    # If the transaction is not valid, don't mine for it.
     updated_state =
-      if CryptoCoin.Transaction.is_valid(transaction) == true and
-           transaction_does_not_spend_unknown_unit(transaction, state) == true and
-           transaction_does_not_double_spend(transaction, state) == true do
-        mining_transaction = mining_reward_transaction(state, state.mining_reward)
-
-        send(
-          state.miner,
-          {:mine, state.block_chain, [transaction, mining_transaction], state.diffLevel}
-        )
-
-        # Ask other nodes to confirm the transaction too.
-        notify_transaction(transaction, state)
-
-        # record this transaction as 'processing'
-        transaction_hash = CryptoCoin.Utils.hash(CryptoCoin.Utils.encode(transaction))
-
-        processing_transactions =
-          state.processing_transactions |> Map.put(transaction_hash, transaction)
-
-        state |> Map.put(:processing_transactions, processing_transactions)
+      if state.pending_transaction |> length == 0 do
+        pending_transaction = [transaction] ++ state.pending_transaction
+        mine_transaction(self())
+        state |> Map.put(:pending_transaction, pending_transaction)
       else
-        # If the transaction is invalid, it should be removed from
-        # processing_transactions if present
-        transaction_hash = CryptoCoin.Utils.hash(CryptoCoin.Utils.encode(transaction))
-        processing_transactions = state.processing_transactions |> Map.delete(transaction_hash)
-        state |> Map.put(:processing_transactions, processing_transactions)
+        pending_transaction = state.pending_transaction ++ [transaction]
+        state |> Map.put(:pending_transaction, pending_transaction)
       end
 
     {:noreply, updated_state}
@@ -253,6 +296,8 @@ defmodule CryptoCoin.FullNode do
     notify_block_chain_to_peers(state.block_chain, [walletId])
     wallets = state |> Map.get(:wallets)
     wallets = [walletId] ++ wallets
+    # IO.puts("wallets count: " <> Integer.to_string(wallets |> length))
+
     {:noreply, state |> Map.put(:wallets, wallets)}
   end
 
@@ -271,18 +316,41 @@ defmodule CryptoCoin.FullNode do
 
         state = state |> Map.put(:trasaction_units_map, transaction_units_map)
 
-        transaction = transactions |> Enum.at(0)
+        # transaction = transactions |> Enum.at(0)
         # Remove the transaction from processing map
-        transaction_hash = CryptoCoin.Utils.hash(CryptoCoin.Utils.encode(transaction))
-        processing_transactions = state.processing_transactions |> Map.delete(transaction_hash)
-        state = state |> Map.put(:processing_transactions, processing_transactions)
+        # transaction_hash = CryptoCoin.Utils.hash(CryptoCoin.Utils.encode(transaction))
+        # processing_transactions = state.processing_transactions |> Map.delete(transaction_hash)
+        # state = state |> Map.put(:processing_transactions, processing_transactions)
+        pending_transaction = state.pending_transaction
+
+        pending_transaction =
+          if pending_transaction |> length > 0 do
+            {_, pending_transaction} = pending_transaction |> List.pop_at(0)
+            pending_transaction
+          else
+            []
+          end
+
+        if pending_transaction |> length > 0 do
+          mine_transaction(self())
+        end
+
+        state = state |> Map.put(:pending_transaction, pending_transaction)
 
         # Notify other nodes and wallets that we found a new longer chain.
         notify_block_chain(chain, state)
+        # IO.puts("block_chain update 1")
         state |> Map.put(:block_chain, chain)
       else
+        IO.puts("Invalid block chaain")
         state
       end
+
+    found_a_block_count = updated_state.found_a_block_count + 1
+    updated_state = updated_state |> Map.put(:found_a_block_count, found_a_block_count)
+
+    # IO.puts("found_a_block_count = " <> Integer.to_string(found_a_block_count))
+    # IO.puts("chain length = " <> Integer.to_string(CryptoCoin.Blockchain.chain_length(updated_state.block_chain)))
 
     {:noreply, updated_state}
   end
